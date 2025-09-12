@@ -1,117 +1,13 @@
-use rusqlite::{Connection, Result, named_params};
-use serde::Deserialize;
+use rusqlite::{Connection, Result};
 
-use std::{
-    path::Path,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::path::Path;
 
-#[derive(Debug, Deserialize)]
-struct ExchangeRecord {
-    #[serde(rename = "CurrencyExchangeSnapshotPairId")]
-    pair_id: u64,
-    #[serde(rename = "CurrencyExchangeSnapshotId")]
-    snapshot_id: u64,
-    #[serde(rename = "Volume")]
-    volume: String,
-    #[serde(rename = "CurrencyOne")]
-    currency_one: CurrencyInfo,
-    #[serde(rename = "CurrencyTwo")]
-    currency_two: CurrencyInfo,
-    #[serde(rename = "CurrencyOneData")]
-    currency_one_data: CurrencyData,
-    #[serde(rename = "CurrencyTwoData")]
-    currency_two_data: CurrencyData,
-}
+mod models;
+use models::ExchangeRecord;
+mod db;
+use db::{insert_all_rows, new_schema};
 
-#[derive(Debug, Deserialize)]
-struct CurrencyInfo {
-    #[serde(rename = "id")]
-    id: u64,
-    #[serde(rename = "itemId")]
-    item_id: u64,
-    #[serde(rename = "apiId")]
-    api_id: String,
-    #[serde(rename = "text")]
-    text: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct CurrencyData {
-    #[serde(rename = "RelativePrice")]
-    relative_price: String,
-    #[serde(rename = "StockValue")]
-    stock_value: String,
-    #[serde(rename = "VolumeTraded")]
-    volume_traded: u64,
-}
-
-#[derive(Debug)]
-struct ExchangeQueryResult {
-    ts: u64,
-    pair_id: u64,
-    snapshot_id: u64,
-    from_currency: String,
-    to_currency: String,
-    from_relative_price: f64,
-    to_relative_price: f64,
-    volume: f64,
-}
-
-fn new_schema(conn: &Connection) -> Result<()> {
-    let schema = "DROP TABLE IF EXISTS exchange_rates;
-    CREATE TABLE IF NOT EXISTS exchange_rates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp INTEGER NOT NULL,
-    pair_id INTEGER NOT NULL,
-    snapshot_id INTEGER NOT NULL,
-    from_currency TEXT NOT NULL,
-    to_currency TEXT NOT NULL,
-    from_relative_price REAL,
-    to_relative_price REAL,
-    volume REAL)";
-
-    conn.execute_batch(schema)?;
-    Ok(())
-}
-
-fn insert_all_rows(records: &[ExchangeRecord], conn: &mut Connection) -> Result<()> {
-    let tx = conn.transaction()?;
-    {
-        let mut insert_statement = tx.prepare("INSERT INTO exchange_rates
-        (timestamp, pair_id, snapshot_id, from_currency, to_currency, from_relative_price, to_relative_price, volume)
-        VALUES
-        (:ts, :pair_id, :snapshot_id, :from_currency, :to_currency, :from_relative_price, :to_relative_price, :volume)")?;
-
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        for entry in records {
-            insert_statement.execute((
-                &now,
-                entry.pair_id,
-                entry.snapshot_id,
-                entry.currency_one.text.clone(),
-                entry.currency_two.text.clone(),
-                entry
-                    .currency_one_data
-                    .relative_price
-                    .parse::<f64>()
-                    .unwrap(),
-                entry
-                    .currency_two_data
-                    .relative_price
-                    .parse::<f64>()
-                    .unwrap(),
-                entry.volume.parse::<f64>().unwrap(),
-            ))?;
-        }
-    }
-    tx.commit()?;
-    Ok(())
-}
+use crate::db::get_most_recent_entry;
 
 fn main() -> Result<()> {
     let path = Path::new("data/response_1757636788999.json");
@@ -126,29 +22,12 @@ fn main() -> Result<()> {
 
     insert_all_rows(&my_data, &mut conn)?;
     conn.close().expect("Couldn't close db: ");
-    let conn2 = Connection::open(db_path).expect("Couldn't open db:");
-    {
-        let mut query = conn2.prepare("SELECT * FROM exchange_rates").unwrap();
-        let elem_iter: Vec<ExchangeQueryResult> = query
-            .query_map([], |row| {
-                Ok(ExchangeQueryResult {
-                    ts: row.get_unwrap(1),
-                    pair_id: row.get_unwrap(2),
-                    snapshot_id: row.get_unwrap(3),
-                    from_currency: row.get_unwrap(4),
-                    to_currency: row.get_unwrap(5),
-                    from_relative_price: row.get_unwrap(6),
-                    to_relative_price: row.get_unwrap(7),
-                    volume: row.get_unwrap(8),
-                })
-            })
-            .expect("Couldn't unwrap query result: ")
-            .collect::<Result<Vec<ExchangeQueryResult>>>()?;
-        for elem in &elem_iter[..=3] {
-            println!("{:?}", elem)
-        }
-    }
+    let mut conn2 = Connection::open(db_path).expect("Couldn't open db:");
+    let query_res = get_most_recent_entry(&mut conn2);
     conn2.close().expect("Couldn't close connection: ");
+    for elem in &query_res[..=2] {
+        println!("{:?}", elem)
+    }
 
     Ok(())
 }

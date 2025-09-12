@@ -1,4 +1,4 @@
-#POE2 Triple Arbitrage Finder
+# POE2 Triple Arbitrage Finder
 
 ## In Rust!
 
