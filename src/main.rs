@@ -125,26 +125,30 @@ fn main() -> Result<()> {
     new_schema(&conn).expect("Couldn't make schema");
 
     insert_all_rows(&my_data, &mut conn)?;
+    conn.close().expect("Couldn't close db: ");
     let conn2 = Connection::open(db_path).expect("Couldn't open db:");
-    let mut query = conn2.prepare("SELECT * FROM exchange_rates").unwrap();
-    let elem_iter: Vec<ExchangeQueryResult> = query
-        .query_map([], |row| {
-            Ok(ExchangeQueryResult {
-                ts: row.get_unwrap(1),
-                pair_id: row.get_unwrap(2),
-                snapshot_id: row.get_unwrap(3),
-                from_currency: row.get_unwrap(4),
-                to_currency: row.get_unwrap(5),
-                from_relative_price: row.get_unwrap(6),
-                to_relative_price: row.get_unwrap(7),
-                volume: row.get_unwrap(8),
+    {
+        let mut query = conn2.prepare("SELECT * FROM exchange_rates").unwrap();
+        let elem_iter: Vec<ExchangeQueryResult> = query
+            .query_map([], |row| {
+                Ok(ExchangeQueryResult {
+                    ts: row.get_unwrap(1),
+                    pair_id: row.get_unwrap(2),
+                    snapshot_id: row.get_unwrap(3),
+                    from_currency: row.get_unwrap(4),
+                    to_currency: row.get_unwrap(5),
+                    from_relative_price: row.get_unwrap(6),
+                    to_relative_price: row.get_unwrap(7),
+                    volume: row.get_unwrap(8),
+                })
             })
-        })
-        .expect("Couldn't unwrap query result: ")
-        .collect::<Result<Vec<ExchangeQueryResult>>>()?;
-    for elem in &elem_iter[..=3] {
-        println!("{:?}", elem)
+            .expect("Couldn't unwrap query result: ")
+            .collect::<Result<Vec<ExchangeQueryResult>>>()?;
+        for elem in &elem_iter[..=3] {
+            println!("{:?}", elem)
+        }
     }
+    conn2.close().expect("Couldn't close connection: ");
 
     Ok(())
 }
