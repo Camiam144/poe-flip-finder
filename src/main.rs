@@ -75,7 +75,41 @@ fn new_schema(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn insert_all_rows(records: Vec<ExchangeRecord>, conn: &Connection) -> Result<()> {
+fn insert_all_rows(records: &[ExchangeRecord], conn: &mut Connection) -> Result<()> {
+    let tx = conn.transaction()?;
+    {
+        let mut insert_statement = tx.prepare("INSERT INTO exchange_rates
+        (timestamp, pair_id, snapshot_id, from_currency, to_currency, from_relative_price, to_relative_price, volume)
+        VALUES
+        (:ts, :pair_id, :snapshot_id, :from_currency, :to_currency, :from_relative_price, :to_relative_price, :volume)")?;
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        for entry in records {
+            insert_statement.execute((
+                &now,
+                entry.pair_id,
+                entry.snapshot_id,
+                entry.currency_one.text.clone(),
+                entry.currency_two.text.clone(),
+                entry
+                    .currency_one_data
+                    .relative_price
+                    .parse::<f64>()
+                    .unwrap(),
+                entry
+                    .currency_two_data
+                    .relative_price
+                    .parse::<f64>()
+                    .unwrap(),
+                entry.volume.parse::<f64>().unwrap(),
+            ))?;
+        }
+    }
+    tx.commit()?;
     Ok(())
 }
 
@@ -87,35 +121,13 @@ fn main() -> Result<()> {
     let my_data: Vec<ExchangeRecord> = serde_json::from_reader(reader).unwrap();
     // println!("{:?}", my_data[0])
     let db_path = Path::new("data/exchangedata.db");
-    let conn = Connection::open(db_path).expect("Couldn't open db");
+    let mut conn = Connection::open(db_path).expect("Couldn't open db");
     new_schema(&conn).expect("Couldn't make schema");
-    let entry = &my_data[0];
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
 
-    conn.execute("INSERT INTO exchange_rates
-        (timestamp, pair_id, snapshot_id, from_currency, to_currency, from_relative_price, to_relative_price, volume)
-        VALUES
-        (:ts, :pair_id, :snapshot_id, :from_currency, :to_currency, :from_relative_price, :to_relative_price, :volume)"
-        ,
-        named_params! {
-            ":ts":now,
-            ":pair_id": entry.pair_id,
-            ":snapshot_id": entry.snapshot_id,
-            ":from_currency": entry.currency_one.text,
-            ":to_currency": entry.currency_two.text,
-            ":from_relative_price": entry.currency_one_data.relative_price.parse::<f64>().unwrap(),
-            ":to_relative_price": entry.currency_two_data.relative_price.parse::<f64>().unwrap(),
-            ":volume": entry.volume.parse::<f64>().unwrap()
-        }).expect("Couldn't write to db");
-
-    conn.close().expect("Couldn't close db:");
-
+    insert_all_rows(&my_data, &mut conn)?;
     let conn2 = Connection::open(db_path).expect("Couldn't open db:");
     let mut query = conn2.prepare("SELECT * FROM exchange_rates").unwrap();
-    let elem_iter = query
+    let elem_iter: Vec<ExchangeQueryResult> = query
         .query_map([], |row| {
             Ok(ExchangeQueryResult {
                 ts: row.get_unwrap(1),
@@ -128,12 +140,10 @@ fn main() -> Result<()> {
                 volume: row.get_unwrap(8),
             })
         })
-        .expect("Couldn't unwrap query result: ");
-    for elem in elem_iter {
-        match elem {
-            Ok(e) => println!("{:?}", e),
-            Err(err) => eprintln!("Error {err}"),
-        }
+        .expect("Couldn't unwrap query result: ")
+        .collect::<Result<Vec<ExchangeQueryResult>>>()?;
+    for elem in &elem_iter[..=3] {
+        println!("{:?}", elem)
     }
 
     Ok(())
