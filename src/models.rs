@@ -1,3 +1,5 @@
+use std::{convert::Infallible, str::FromStr};
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -12,6 +14,21 @@ pub struct ExchangeRecord {
     pub currency_two: CurrencyInfo,
     pub currency_one_data: CurrencyData,
     pub currency_two_data: CurrencyData,
+}
+
+impl ExchangeRecord {
+    pub fn trading_currency(&self) -> (TradingCurrencyId, TradingCurrencyId) {
+        let curr1 = TradingCurrencyId::from_str(&self.currency_one.text).unwrap();
+        let curr2 = TradingCurrencyId::from_str(&self.currency_two.text).unwrap();
+
+        (curr1, curr2)
+    }
+
+    pub fn is_valid(&self) -> bool {
+        let (curr1, curr2) = self.trading_currency();
+        (curr1 != TradingCurrencyId::Other && curr2 == TradingCurrencyId::Other)
+            || (curr1 == TradingCurrencyId::Other && curr2 != TradingCurrencyId::Other)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,4 +71,24 @@ struct CurrencyExchangeSnapshot {
     epoch: u64,
     market_cap: String,
     volume: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum TradingCurrencyId {
+    Exalt,
+    Chaos,
+    Divine,
+    Other,
+}
+
+impl FromStr for TradingCurrencyId {
+    type Err = Infallible;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "Exalted Orb" => TradingCurrencyId::Exalt,
+            "Chaos Orb" => TradingCurrencyId::Chaos,
+            "Divine Orb" => TradingCurrencyId::Divine,
+            _ => TradingCurrencyId::Other,
+        })
+    }
 }
