@@ -2,7 +2,7 @@ use std::{convert::Infallible, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 pub struct ExchangeRecord {
     #[serde(rename = "CurrencyExchangeSnapshotPairId")]
@@ -31,7 +31,7 @@ impl ExchangeRecord {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrencyInfo {
     pub id: u64,
@@ -43,7 +43,7 @@ pub struct CurrencyInfo {
     pub icon_url: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 pub struct CurrencyData {
     pub highest_stock: u64,
@@ -90,5 +90,59 @@ impl FromStr for TradingCurrencyId {
             "Divine Orb" => TradingCurrencyId::Divine,
             _ => TradingCurrencyId::Other,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_exalt() {
+        let orb = TradingCurrencyId::from_str("Exalted Orb");
+        assert_eq!(orb.unwrap(), TradingCurrencyId::Exalt)
+    }
+    #[test]
+    fn test_parse_divine() {
+        let orb = TradingCurrencyId::from_str("Divine Orb");
+        assert_eq!(orb.unwrap(), TradingCurrencyId::Divine)
+    }
+    #[test]
+    fn test_parse_chaos() {
+        let orb = TradingCurrencyId::from_str("Chaos Orb");
+        assert_eq!(orb.unwrap(), TradingCurrencyId::Chaos)
+    }
+    #[test]
+    fn test_parse_other() {
+        let orb = TradingCurrencyId::from_str("Vaal Orb");
+        assert_eq!(orb.unwrap(), TradingCurrencyId::Other)
+    }
+    #[test]
+    fn test_is_valid_curr1_curr2_other() {
+        let mut exchange = ExchangeRecord::default();
+        exchange.currency_one.text = "Exalted Orb".to_string();
+        exchange.currency_two.text = "Vaal Orb".to_string();
+        assert!(exchange.is_valid())
+    }
+    #[test]
+    fn test_is_valid_curr1_other_curr2() {
+        let mut exchange = ExchangeRecord::default();
+        exchange.currency_two.text = "Exalted Orb".to_string();
+        exchange.currency_one.text = "Vaal Orb".to_string();
+        assert!(exchange.is_valid())
+    }
+    #[test]
+    fn test_is_valid_curr1_curr2() {
+        let mut exchange = ExchangeRecord::default();
+        exchange.currency_two.text = "Exalted Orb".to_string();
+        exchange.currency_one.text = "Divine Orb".to_string();
+        assert!(!exchange.is_valid())
+    }
+    #[test]
+    fn test_is_valid_curr1_other_curr2_other() {
+        let mut exchange = ExchangeRecord::default();
+        exchange.currency_two.text = "Orb of Transmutation".to_string();
+        exchange.currency_one.text = "Vaal Orb".to_string();
+        assert!(!exchange.is_valid())
     }
 }
