@@ -32,17 +32,17 @@ fn str_as_f64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Erro
 }
 
 impl ExchangeRecord {
-    pub fn trading_currency(&self) -> (TradingCurrencyId, TradingCurrencyId) {
-        let curr1 = TradingCurrencyId::from_str(&self.currency_one.text).unwrap();
-        let curr2 = TradingCurrencyId::from_str(&self.currency_two.text).unwrap();
+    pub fn trading_currency(&self) -> (TradingCurrencyType, TradingCurrencyType) {
+        let curr1 = TradingCurrencyType::from_str(&self.currency_one.text).unwrap();
+        let curr2 = TradingCurrencyType::from_str(&self.currency_two.text).unwrap();
 
         (curr1, curr2)
     }
 
     pub fn is_valid_bridge(&self) -> bool {
         let (curr1, curr2) = self.trading_currency();
-        (curr1 != TradingCurrencyId::Other && curr2 == TradingCurrencyId::Other)
-            || (curr1 == TradingCurrencyId::Other && curr2 != TradingCurrencyId::Other)
+        (curr1 != TradingCurrencyType::Other && curr2 == TradingCurrencyType::Other)
+            || (curr1 == TradingCurrencyType::Other && curr2 != TradingCurrencyType::Other)
     }
 }
 
@@ -92,23 +92,30 @@ struct CurrencyExchangeSnapshot {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum TradingCurrencyId {
+pub enum TradingCurrencyType {
     Exalt,
     Chaos,
     Divine,
     Other,
 }
 
-impl FromStr for TradingCurrencyId {
+impl FromStr for TradingCurrencyType {
     type Err = Infallible;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
-            "Exalted Orb" => TradingCurrencyId::Exalt,
-            "Chaos Orb" => TradingCurrencyId::Chaos,
-            "Divine Orb" => TradingCurrencyId::Divine,
-            _ => TradingCurrencyId::Other,
+            "Exalted Orb" => TradingCurrencyType::Exalt,
+            "Chaos Orb" => TradingCurrencyType::Chaos,
+            "Divine Orb" => TradingCurrencyType::Divine,
+            _ => TradingCurrencyType::Other,
         })
     }
+}
+
+#[derive(Debug, Default)]
+pub struct TradingCurrencyRates {
+    pub div_to_exalt: f64,
+    pub div_to_chaos: f64,
+    pub chaos_to_exalt: f64,
 }
 
 #[cfg(test)]
@@ -117,23 +124,23 @@ mod tests {
 
     #[test]
     fn test_parse_exalt() {
-        let orb = TradingCurrencyId::from_str("Exalted Orb");
-        assert_eq!(orb.unwrap(), TradingCurrencyId::Exalt)
+        let orb = TradingCurrencyType::from_str("Exalted Orb");
+        assert_eq!(orb.unwrap(), TradingCurrencyType::Exalt)
     }
     #[test]
     fn test_parse_divine() {
-        let orb = TradingCurrencyId::from_str("Divine Orb");
-        assert_eq!(orb.unwrap(), TradingCurrencyId::Divine)
+        let orb = TradingCurrencyType::from_str("Divine Orb");
+        assert_eq!(orb.unwrap(), TradingCurrencyType::Divine)
     }
     #[test]
     fn test_parse_chaos() {
-        let orb = TradingCurrencyId::from_str("Chaos Orb");
-        assert_eq!(orb.unwrap(), TradingCurrencyId::Chaos)
+        let orb = TradingCurrencyType::from_str("Chaos Orb");
+        assert_eq!(orb.unwrap(), TradingCurrencyType::Chaos)
     }
     #[test]
     fn test_parse_other() {
-        let orb = TradingCurrencyId::from_str("Vaal Orb");
-        assert_eq!(orb.unwrap(), TradingCurrencyId::Other)
+        let orb = TradingCurrencyType::from_str("Vaal Orb");
+        assert_eq!(orb.unwrap(), TradingCurrencyType::Other)
     }
     #[test]
     fn test_is_valid_curr1_curr2_other() {

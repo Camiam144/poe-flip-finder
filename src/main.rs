@@ -2,12 +2,12 @@ use rusqlite::{Connection, Result};
 
 use std::path::Path;
 
-mod models;
-use models::ExchangeRecord;
 mod db;
-use db::{insert_all_rows, new_schema};
-
-use crate::db::get_most_recent_entry;
+mod logic;
+mod models;
+use db::{get_most_recent_entry, insert_all_rows, new_schema};
+use logic::get_base_prices;
+use models::{ExchangeRecord, TradingCurrencyRates};
 
 fn main() -> Result<()> {
     let path: &Path = Path::new("data/response_1757636788999.json");
@@ -16,8 +16,14 @@ fn main() -> Result<()> {
 
     let all_pairs: Vec<ExchangeRecord> = serde_json::from_reader(reader).unwrap();
     // println!("{:?}", my_data[0])
-    // These will be configurable via cmd line at some point probably
+    // These are the base rates we need to compare against.
+    let mut base_rates: TradingCurrencyRates = TradingCurrencyRates::default();
+    get_base_prices(&all_pairs, &mut base_rates);
+    println!("Divine to Exalt ratio {:?}", base_rates.div_to_exalt);
+    println!("Divine to Chaos ratio {:?}", base_rates.div_to_chaos);
+    println!("Chaos to Exalt ratio {:?}", base_rates.chaos_to_exalt);
 
+    // These will be configurable via cmd line at some point probably
     let min_vol: f64 = 100.0;
     let filtered_trades: Vec<ExchangeRecord> = all_pairs
         .into_iter()
