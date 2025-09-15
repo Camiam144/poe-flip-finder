@@ -14,13 +14,20 @@ fn main() -> Result<()> {
     let json_file: std::fs::File = std::fs::File::open(path).unwrap();
     let reader: std::io::BufReader<std::fs::File> = std::io::BufReader::new(json_file);
 
-    let my_data: Vec<ExchangeRecord> = serde_json::from_reader(reader).unwrap();
+    let all_pairs: Vec<ExchangeRecord> = serde_json::from_reader(reader).unwrap();
     // println!("{:?}", my_data[0])
+    // These will be configurable via cmd line at some point probably
+
+    let min_vol: f64 = 100.0;
+    let filtered_trades: Vec<ExchangeRecord> = all_pairs
+        .into_iter()
+        .filter(|exch| exch.volume >= min_vol && exch.is_valid())
+        .collect();
     let db_path: &Path = Path::new("data/exchangedata.db");
     let mut conn: Connection = Connection::open(db_path).expect("Couldn't open db");
     new_schema(&conn).expect("Couldn't make schema");
 
-    insert_all_rows(&my_data, &mut conn)?;
+    insert_all_rows(&filtered_trades, &mut conn)?;
     conn.close().expect("Couldn't close db: ");
     let mut conn2: Connection = Connection::open(db_path).expect("Couldn't open db:");
     let query_res: Vec<models::ExchangeQueryResult> = get_most_recent_entry(&mut conn2);

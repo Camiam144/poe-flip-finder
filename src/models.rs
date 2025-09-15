@@ -1,6 +1,7 @@
 use std::{convert::Infallible, str::FromStr};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
+use serde_json::Value;
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
@@ -9,11 +10,23 @@ pub struct ExchangeRecord {
     pub pair_id: u64,
     #[serde(rename = "CurrencyExchangeSnapshotId")]
     pub snapshot_id: u64,
-    pub volume: String,
+    #[serde(default, deserialize_with = "str_as_f64")]
+    pub volume: f64,
     pub currency_one: CurrencyInfo,
     pub currency_two: CurrencyInfo,
     pub currency_one_data: CurrencyData,
     pub currency_two_data: CurrencyData,
+}
+// Need this to deserialize the string float into a f64.
+
+fn str_as_f64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
+    if let Value::String(s) =
+        Value::deserialize(deserializer).expect("Couldn't deserialize value: ")
+    {
+        s.parse::<f64>().map_err(de::Error::custom)
+    } else {
+        Err(de::Error::custom("Couldn't parse string to f64: "))
+    }
 }
 
 impl ExchangeRecord {
@@ -47,9 +60,12 @@ pub struct CurrencyInfo {
 #[serde(rename_all = "PascalCase")]
 pub struct CurrencyData {
     pub highest_stock: u64,
-    pub relative_price: String,
-    pub stock_value: String,
-    pub value_traded: String,
+    #[serde(default, deserialize_with = "str_as_f64")]
+    pub relative_price: f64,
+    #[serde(default, deserialize_with = "str_as_f64")]
+    pub stock_value: f64,
+    #[serde(default, deserialize_with = "str_as_f64")]
+    pub value_traded: f64,
     pub volume_traded: u64,
 }
 

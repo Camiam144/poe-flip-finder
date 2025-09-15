@@ -51,7 +51,7 @@ pub fn insert_all_rows(records: &[ExchangeRecord], conn: &mut Connection) -> Res
                     .relative_price
                     .parse::<f64>()
                     .unwrap(),
-                entry.volume.parse::<f64>().unwrap(),
+                entry.volume,
             ))?;
         }
     }
