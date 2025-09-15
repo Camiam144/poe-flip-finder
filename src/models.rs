@@ -17,8 +17,10 @@ pub struct ExchangeRecord {
     pub currency_one_data: CurrencyData,
     pub currency_two_data: CurrencyData,
 }
-// Need this to deserialize the string float into a f64.
 
+// Need this to deserialize the string float into a f64.
+// Can find multiple examples online, I chose this because I want the program
+// to panic if it can't format the string. No unwrapping options in my struct!
 fn str_as_f64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
     if let Value::String(s) =
         Value::deserialize(deserializer).expect("Couldn't deserialize value: ")
@@ -37,7 +39,7 @@ impl ExchangeRecord {
         (curr1, curr2)
     }
 
-    pub fn is_valid(&self) -> bool {
+    pub fn is_valid_bridge(&self) -> bool {
         let (curr1, curr2) = self.trading_currency();
         (curr1 != TradingCurrencyId::Other && curr2 == TradingCurrencyId::Other)
             || (curr1 == TradingCurrencyId::Other && curr2 != TradingCurrencyId::Other)
@@ -138,27 +140,27 @@ mod tests {
         let mut exchange = ExchangeRecord::default();
         exchange.currency_one.text = "Exalted Orb".to_string();
         exchange.currency_two.text = "Vaal Orb".to_string();
-        assert!(exchange.is_valid())
+        assert!(exchange.is_valid_bridge())
     }
     #[test]
     fn test_is_valid_curr1_other_curr2() {
         let mut exchange = ExchangeRecord::default();
         exchange.currency_two.text = "Exalted Orb".to_string();
         exchange.currency_one.text = "Vaal Orb".to_string();
-        assert!(exchange.is_valid())
+        assert!(exchange.is_valid_bridge())
     }
     #[test]
     fn test_is_valid_curr1_curr2() {
         let mut exchange = ExchangeRecord::default();
         exchange.currency_two.text = "Exalted Orb".to_string();
         exchange.currency_one.text = "Divine Orb".to_string();
-        assert!(!exchange.is_valid())
+        assert!(!exchange.is_valid_bridge())
     }
     #[test]
     fn test_is_valid_curr1_other_curr2_other() {
         let mut exchange = ExchangeRecord::default();
         exchange.currency_two.text = "Orb of Transmutation".to_string();
         exchange.currency_one.text = "Vaal Orb".to_string();
-        assert!(!exchange.is_valid())
+        assert!(!exchange.is_valid_bridge())
     }
 }

@@ -21,7 +21,7 @@ fn main() -> Result<()> {
     let min_vol: f64 = 100.0;
     let filtered_trades: Vec<ExchangeRecord> = all_pairs
         .into_iter()
-        .filter(|exch| exch.volume >= min_vol && exch.is_valid())
+        .filter(|exch| exch.volume >= min_vol && exch.is_valid_bridge())
         .collect();
     let db_path: &Path = Path::new("data/exchangedata.db");
     let mut conn: Connection = Connection::open(db_path).expect("Couldn't open db");

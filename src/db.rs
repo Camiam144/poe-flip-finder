@@ -41,16 +41,8 @@ pub fn insert_all_rows(records: &[ExchangeRecord], conn: &mut Connection) -> Res
                 entry.snapshot_id,
                 entry.currency_one.text.clone(),
                 entry.currency_two.text.clone(),
-                entry
-                    .currency_one_data
-                    .relative_price
-                    .parse::<f64>()
-                    .unwrap(),
-                entry
-                    .currency_two_data
-                    .relative_price
-                    .parse::<f64>()
-                    .unwrap(),
+                entry.currency_one_data.relative_price,
+                entry.currency_two_data.relative_price,
                 entry.volume,
             ))?;
         }
