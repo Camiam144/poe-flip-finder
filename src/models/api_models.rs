@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::models::logic_models::TradingCurrencyType;
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 pub struct ExchangeRecord {
     #[serde(rename = "CurrencyExchangeSnapshotPairId")]
@@ -24,12 +24,19 @@ pub struct ExchangeRecord {
 // Can find multiple examples online, I chose this because I want the program
 // to panic if it can't format the string. No unwrapping options in my struct!
 fn str_as_f64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
-    if let Value::String(s) =
-        Value::deserialize(deserializer).expect("Couldn't deserialize value: ")
-    {
-        s.parse::<f64>().map_err(de::Error::custom)
-    } else {
-        Err(de::Error::custom("Couldn't parse string to f64: "))
+    let val = Value::deserialize(deserializer)
+        .map_err(|e| de::Error::custom(format!("Couldn't deserialize value: {}", e)))?;
+
+    match val {
+        Value::String(s) => s
+            .parse::<f64>()
+            .map_err(|e| de::Error::custom(format!("Got bad float {}: {e}", s))),
+        Value::Number(n) => n.as_f64().ok_or(de::Error::custom(format!(
+            "Couldn't convert number to f64: {n}"
+        ))),
+        other => Err(de::Error::custom(format!(
+            "Expected parsable string, got {other:?}"
+        ))),
     }
 }
 
@@ -49,7 +56,7 @@ impl ExchangeRecord {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrencyInfo {
     pub id: u64,
@@ -62,7 +69,7 @@ pub struct CurrencyInfo {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 pub struct CurrencyData {
     pub highest_stock: u64,
