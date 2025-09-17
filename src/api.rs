@@ -1,6 +1,6 @@
 use reqwest::blocking;
 
-use crate::models::ExchangeSnapshot;
+use crate::models::api_models::ExchangeSnapshot;
 
 pub fn get_exchange_snapshot() -> reqwest::Result<ExchangeSnapshot> {
     let url = "https://poe2scout.com/api/currencyExchangeSnapshot?league=Rise%20of%20the%20Abyssal";

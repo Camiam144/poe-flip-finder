@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result};
+// use rusqlite::{Connection, Result};
 
 use std::path::Path;
 
@@ -7,12 +7,15 @@ mod api;
 mod logic;
 mod models;
 // use db::{get_most_recent_entry, insert_all_rows, new_schema};
-use api::get_exchange_snapshot;
-use logic::get_base_prices;
-use models::{ExchangeRecord, ExchangeSnapshot, TradingCurrencyRates};
+// use api;
+// use logic;
+// use models::{ExchangeRecord, ExchangeSnapshot, TradingCurrencyRates};
 
-fn main() -> Result<()> {
-    let most_recent_snapshot: ExchangeSnapshot = get_exchange_snapshot().unwrap();
+use models::api_models::{ExchangeRecord, ExchangeSnapshot};
+use models::logic_models::TradingCurrencyRates;
+
+fn main() {
+    let most_recent_snapshot: ExchangeSnapshot = api::get_exchange_snapshot().unwrap();
     println!("{}", &most_recent_snapshot.epoch);
     let path: &Path = Path::new("data/response_1757636788999.json");
     let json_file: std::fs::File = std::fs::File::open(path).unwrap();
@@ -22,7 +25,7 @@ fn main() -> Result<()> {
     // println!("{:?}", my_data[0])
     // These are the base rates we need to compare against.
     let mut base_rates: TradingCurrencyRates = TradingCurrencyRates::default();
-    get_base_prices(&all_pairs, &mut base_rates);
+    logic::get_base_prices(&all_pairs, &mut base_rates);
     println!("Divine to Exalt ratio {:?}", base_rates.div_to_exalt);
     println!("Divine to Chaos ratio {:?}", base_rates.div_to_chaos);
     println!("Chaos to Exalt ratio {:?}", base_rates.chaos_to_exalt);
@@ -54,5 +57,5 @@ fn main() -> Result<()> {
             elem.currency_two_data.relative_price
         )
     }
-    Ok(())
+    // Ok(())
 }

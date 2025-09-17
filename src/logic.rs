@@ -1,4 +1,5 @@
-use crate::models::{ExchangeRecord, TradingCurrencyRates, TradingCurrencyType};
+use crate::models::api_models::ExchangeRecord;
+use crate::models::logic_models::{TradingCurrencyRates, TradingCurrencyType};
 
 pub fn get_base_prices(records: &[ExchangeRecord], rates: &mut TradingCurrencyRates) {
     for record in records {
