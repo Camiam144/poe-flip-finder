@@ -18,7 +18,7 @@ pub struct ExchangeRecord {
     pub currency_two_data: CurrencyData,
 }
 
-// Need this to deserialize the string float into a f64.
+// Need this to deserialize string floats into a f64. Ripped from docs/reddit.
 // Can find multiple examples online, I chose this because I want the program
 // to panic if it can't format the string. No unwrapping options in my struct!
 fn str_as_f64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
@@ -46,6 +46,7 @@ impl ExchangeRecord {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrencyInfo {
@@ -58,6 +59,7 @@ pub struct CurrencyInfo {
     pub icon_url: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 pub struct CurrencyData {
@@ -71,6 +73,7 @@ pub struct CurrencyData {
     pub volume_traded: u64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct ExchangeQueryResult {
     pub ts: u64,
@@ -116,6 +119,16 @@ pub struct TradingCurrencyRates {
     pub div_to_exalt: f64,
     pub div_to_chaos: f64,
     pub chaos_to_exalt: f64,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ExchangeSnapshot {
+    pub epoch: u64,
+    #[serde(default, deserialize_with = "str_as_f64")]
+    pub market_cap: f64,
+    #[serde(default, deserialize_with = "str_as_f64")]
+    pub volume: f64,
 }
 
 #[cfg(test)]
