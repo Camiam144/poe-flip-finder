@@ -43,7 +43,7 @@ fn get_snapshot_number_from_name(snapshot_name: String) -> Option<u64> {
         .ok()
 }
 
-pub fn check_if_snapshot_exists(newest_snapshot: u64, snapshot_list: Vec<DirEntry>) -> bool {
+pub fn check_if_snapshot_exists(newest_snapshot: u64, snapshot_list: &Vec<DirEntry>) -> bool {
     for snapshot in snapshot_list {
         if newest_snapshot
             == get_snapshot_number_from_name(snapshot.file_name().into_string().unwrap()).unwrap()
