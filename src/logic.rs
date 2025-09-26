@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::{self, DirEntry, File};
 use std::io::BufWriter;
 use std::path::Path;
@@ -35,7 +36,7 @@ pub fn list_all_snapshots(path: &Path) -> Vec<DirEntry> {
     out_vec
 }
 
-fn get_snapshot_number_from_name(snapshot_name: String) -> Option<u64> {
+fn get_snapshot_number_from_name(snapshot_name: &str) -> Option<u64> {
     let underscore_idx = snapshot_name.find("_")?;
     let dot_idx = snapshot_name.find(".")?;
     snapshot_name[underscore_idx + 1..dot_idx]
@@ -43,10 +44,10 @@ fn get_snapshot_number_from_name(snapshot_name: String) -> Option<u64> {
         .ok()
 }
 
-pub fn check_if_snapshot_exists(newest_snapshot: u64, snapshot_list: &Vec<DirEntry>) -> bool {
+pub fn check_if_snapshot_exists(newest_snapshot: u64, snapshot_list: &[DirEntry]) -> bool {
     for snapshot in snapshot_list {
         if newest_snapshot
-            == get_snapshot_number_from_name(snapshot.file_name().into_string().unwrap()).unwrap()
+            == get_snapshot_number_from_name(snapshot.file_name().to_str().unwrap()).unwrap()
         {
             return true;
         }
@@ -74,3 +75,60 @@ pub fn cache_to_disk(
 // I think we then have another struct that's like {diff, ExchangeRecord} and
 // push that into a new vec. Sort that vec by absolute difference, then we can
 // pretty print the output? We need to compute the expected return at some point.
+
+pub fn build_hub_bridge_maps(
+    records: &[ExchangeRecord],
+) -> (
+    HashMap<(TradingCurrencyType, String), f64>,
+    HashMap<(String, TradingCurrencyType), f64>,
+) {
+    // Build our lookup tables here so it's faster to scan every single
+    // combination instead of looping through the vec of records a bazillion times
+    let mut hub_to_bridge = HashMap::new();
+    let mut bridge_to_hub = HashMap::new();
+
+    for record in records {
+        if let Some((hub, hub_ex, bridge_str, bridge_ex)) = record.hub_bridge_price() {
+            let hub_per_bridge_ratio = hub_ex / bridge_ex;
+            hub_to_bridge.insert((hub.clone(), bridge_str.clone()), hub_per_bridge_ratio);
+            bridge_to_hub.insert((bridge_str, hub), hub_per_bridge_ratio.recip());
+        }
+    }
+    (hub_to_bridge, bridge_to_hub)
+}
+
+pub fn find_profit(
+    hub_to_bridge: &HashMap<(TradingCurrencyType, String), f64>,
+    bridge_to_hub: &HashMap<(String, TradingCurrencyType), f64>,
+    margin_pct: f64,
+) -> Vec<(TradingCurrencyType, String, TradingCurrencyType, f64)> {
+    let mut results = Vec::new();
+
+    let hubs = [
+        TradingCurrencyType::Exalt,
+        TradingCurrencyType::Chaos,
+        TradingCurrencyType::Divine,
+    ];
+
+    for &first_hub in &hubs {
+        for &second_hub in &hubs {
+            if first_hub == second_hub {
+                continue;
+            }
+            // Now we grind through everything
+
+            for ((hub_one, bridge), rate_one) in
+                hub_to_bridge.iter().filter(|((h, _), _)| *h == first_hub)
+            {
+                if let Some(rate_two) = bridge_to_hub.get(&(bridge.clone(), second_hub)) {
+                    // If we have a rate two, this means we went A -> X -> B
+                    let cost = rate_one * rate_two;
+                    if cost > 1.0 + margin_pct {
+                        results.push((first_hub, bridge.clone(), second_hub, cost));
+                    }
+                }
+            }
+        }
+    }
+    results
+}

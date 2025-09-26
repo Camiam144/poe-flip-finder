@@ -1,6 +1,6 @@
-use std::{convert::Infallible, str::FromStr};
+use std::{convert::Infallible, fmt, str::FromStr};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TradingCurrencyType {
     Exalt,
     Chaos,
@@ -17,6 +17,16 @@ impl FromStr for TradingCurrencyType {
             "Divine Orb" => TradingCurrencyType::Divine,
             _ => TradingCurrencyType::Other,
         })
+    }
+}
+impl fmt::Display for TradingCurrencyType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TradingCurrencyType::Exalt => write!(f, "Exalt"),
+            TradingCurrencyType::Chaos => write!(f, "Chaos"),
+            TradingCurrencyType::Divine => write!(f, "Divine"),
+            TradingCurrencyType::Other => write!(f, "Other"),
+        }
     }
 }
 

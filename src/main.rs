@@ -13,7 +13,7 @@ use models::logic_models::TradingCurrencyRates;
 
 fn get_freshest_data(
     most_recent_epoch: u64,
-    list_cached_snapshots: &Vec<std::fs::DirEntry>,
+    list_cached_snapshots: &[std::fs::DirEntry],
     client: &Client,
     data_path: &Path,
 ) -> Vec<ExchangeRecord> {
@@ -82,14 +82,26 @@ fn main() {
 
     let num_elements: usize = 10;
 
-    for elem in &valid_bridges[..=num_elements] {
+    let (hub_to_bridge, bridge_to_hub) = logic::build_hub_bridge_maps(&valid_bridges);
+
+    let mut potential_profits = logic::find_profit(&hub_to_bridge, &bridge_to_hub, 0.1);
+    potential_profits.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap());
+
+    for elem in &potential_profits[..num_elements] {
         println!(
-            "Curr 1: {} Curr 2: {}, RP 1: {}, RP 2: {} | Volume {}",
-            elem.currency_one.text,
-            elem.currency_two.text,
-            elem.currency_one_data.relative_price,
-            elem.currency_two_data.relative_price,
-            elem.volume
+            "Hub 1 {} -> Bridge {} -> Hub 2 {} | margin {}",
+            elem.0, elem.1, elem.2, elem.3
         )
     }
+
+    // for elem in &valid_bridges[..=num_elements] {
+    //     println!(
+    //         "Curr 1: {} Curr 2: {}, RP 1: {}, RP 2: {} | Volume {}",
+    //         elem.currency_one.text,
+    //         elem.currency_two.text,
+    //         elem.currency_one_data.relative_price,
+    //         elem.currency_two_data.relative_price,
+    //         elem.volume
+    //     )
+    // }
 }

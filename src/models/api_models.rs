@@ -21,8 +21,6 @@ pub struct ExchangeRecord {
 }
 
 // Need this to deserialize string floats into a f64. Ripped from docs/reddit.
-// Can find multiple examples online, I chose this because I want the program
-// to panic if it can't format the string. No unwrapping options in my struct!
 fn str_as_f64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
     let val = Value::deserialize(deserializer)
         .map_err(|e| de::Error::custom(format!("Couldn't deserialize value: {}", e)))?;
@@ -52,6 +50,40 @@ impl ExchangeRecord {
         let (curr1, curr2) = self.trading_currency();
         (curr1 != TradingCurrencyType::Other && curr2 == TradingCurrencyType::Other)
             || (curr1 == TradingCurrencyType::Other && curr2 != TradingCurrencyType::Other)
+    }
+
+    pub fn hub_bridge_price(&self) -> Option<(TradingCurrencyType, f64, String, f64)> {
+        // Get the price of the hub -> bridge or bridge -> hub in a manner
+        // that is easier to work with
+        let (c1, c2) = self.trading_currency();
+
+        match (c1, c2) {
+            // hub -> bridge
+            (
+                hub @ TradingCurrencyType::Exalt
+                | hub @ TradingCurrencyType::Chaos
+                | hub @ TradingCurrencyType::Divine,
+                TradingCurrencyType::Other,
+            ) => Some((
+                hub,
+                self.currency_one_data.relative_price,
+                self.currency_two.text.clone(),
+                self.currency_two_data.relative_price,
+            )),
+            // bridge -> hub
+            (
+                TradingCurrencyType::Other,
+                hub @ TradingCurrencyType::Exalt
+                | hub @ TradingCurrencyType::Chaos
+                | hub @ TradingCurrencyType::Divine,
+            ) => Some((
+                hub,
+                self.currency_two_data.relative_price,
+                self.currency_one.text.clone(),
+                self.currency_one_data.relative_price,
+            )),
+            _ => None,
+        }
     }
 }
 
