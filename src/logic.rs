@@ -97,10 +97,9 @@ pub fn build_hub_bridge_maps(
     (hub_to_bridge, bridge_to_hub)
 }
 
-pub fn find_profit(
+pub fn build_bridges(
     hub_to_bridge: &HashMap<(TradingCurrencyType, String), f64>,
     bridge_to_hub: &HashMap<(String, TradingCurrencyType), f64>,
-    margin_pct: f64,
 ) -> Vec<(TradingCurrencyType, String, TradingCurrencyType, f64)> {
     let mut results = Vec::new();
 
@@ -117,18 +116,45 @@ pub fn find_profit(
             }
             // Now we grind through everything
 
-            for ((hub_one, bridge), rate_one) in
+            for ((_hub_one, bridge), rate_one) in
                 hub_to_bridge.iter().filter(|((h, _), _)| *h == first_hub)
             {
                 if let Some(rate_two) = bridge_to_hub.get(&(bridge.clone(), second_hub)) {
                     // If we have a rate two, this means we went A -> X -> B
+                    // rate one is norm(A)/norm(X) and rate two is norm(X)/norm(B)
+                    // so multiplying gives us norm(A)/norm(B)
+                    // when B is exalts, norm(B) should be close to 1, so this
+                    // will give us the relative price for A through the bridge
+                    // I *think* this is right...
                     let cost = rate_one * rate_two;
-                    if cost > 1.0 + margin_pct {
-                        results.push((first_hub, bridge.clone(), second_hub, cost));
-                    }
+                    results.push((first_hub, bridge.clone(), second_hub, cost));
                 }
             }
         }
     }
     results
+}
+
+pub fn eval_profit(
+    bridge_elem: &(TradingCurrencyType, String, TradingCurrencyType, f64),
+    ratios: &TradingCurrencyRates,
+    // min_profit_frac: f64,
+) -> bool {
+    let tc1 = bridge_elem.0;
+    let tc2 = bridge_elem.2;
+    // let div_frac = (1.0 + min_profit_frac) * ratios.div_to_exalt;
+    // let chaos_frac = (1.0 + min_profit_frac) * ratios.chaos_to_exalt;
+    // let div_chaos_frac = (1.0 + min_profit_frac) * ratios.div_to_chaos;
+    match (tc1, tc2) {
+        (TradingCurrencyType::Divine, TradingCurrencyType::Exalt) => {
+            bridge_elem.3 >= ratios.div_to_exalt
+        }
+        (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt) => {
+            bridge_elem.3 >= ratios.chaos_to_exalt
+        }
+        (TradingCurrencyType::Divine, TradingCurrencyType::Chaos) => {
+            bridge_elem.3 >= ratios.div_to_chaos
+        }
+        (_, _) => false,
+    }
 }
