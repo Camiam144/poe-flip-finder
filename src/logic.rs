@@ -3,10 +3,39 @@ use std::fs::{self, DirEntry, File};
 use std::io::BufWriter;
 use std::path::Path;
 
+use reqwest::blocking::Client;
 use serde::Serialize;
 
+use crate::api;
 use crate::models::api_models::ExchangeRecord;
 use crate::models::logic_models::{TradingCurrencyRates, TradingCurrencyType};
+
+pub fn get_freshest_data(
+    most_recent_epoch: u64,
+    list_cached_snapshots: &[std::fs::DirEntry],
+    client: &Client,
+    data_path: &Path,
+) -> Vec<ExchangeRecord> {
+    if check_if_snapshot_exists(most_recent_epoch, list_cached_snapshots) {
+        println!(
+            "We have the most recent snapshot, number {}",
+            &most_recent_epoch
+        );
+        let filename = format!("response_{}.json", &most_recent_epoch);
+        let json_file: std::fs::File =
+            std::fs::File::open(data_path.join(filename)).expect("Couldn't open json: ");
+        let reader: std::io::BufReader<std::fs::File> = std::io::BufReader::new(json_file);
+        serde_json::from_reader(reader).expect("Couldn't deserialize json: ")
+    } else {
+        println!("We do not have the most recent snapshot, getting newest pairs");
+        let fresh_data =
+            api::get_newest_snapshot_pairs(client).expect("Couldn't get newest set of pairs: ");
+        // After we get them cache them to disk so we don't get banned from the api
+        let filename = format!("response_{}.json", &most_recent_epoch);
+        cache_to_disk(&fresh_data, data_path, &filename).expect("Couldn't cache snapshot to disk:");
+        fresh_data
+    }
+}
 
 pub fn get_base_prices(records: &[ExchangeRecord], rates: &mut TradingCurrencyRates) {
     for record in records {
@@ -104,9 +133,9 @@ pub fn build_bridges(
     let mut results = Vec::new();
 
     let hubs = [
-        TradingCurrencyType::Exalt,
-        TradingCurrencyType::Chaos,
         TradingCurrencyType::Divine,
+        TradingCurrencyType::Chaos,
+        TradingCurrencyType::Exalt,
     ];
 
     for &first_hub in &hubs {
@@ -158,4 +187,17 @@ pub fn eval_profit(
         // (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => true,
         (_, _) => false,
     }
+}
+
+pub fn get_top_items(
+    all_items: &[(TradingCurrencyType, String, TradingCurrencyType, f64)],
+    currency: &TradingCurrencyType,
+    num_items: usize,
+) -> Vec<(TradingCurrencyType, String, TradingCurrencyType, f64)> {
+    all_items
+        .iter()
+        .filter(|(tc1, _, _, _)| tc1 == currency)
+        .take(num_items)
+        .cloned()
+        .collect()
 }
