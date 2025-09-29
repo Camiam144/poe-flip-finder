@@ -138,23 +138,24 @@ pub fn build_bridges(
 pub fn eval_profit(
     bridge_elem: &(TradingCurrencyType, String, TradingCurrencyType, f64),
     ratios: &TradingCurrencyRates,
-    // min_profit_frac: f64,
+    min_profit_frac: f64,
 ) -> bool {
-    let tc1 = bridge_elem.0;
-    let tc2 = bridge_elem.2;
-    // let div_frac = (1.0 + min_profit_frac) * ratios.div_to_exalt;
-    // let chaos_frac = (1.0 + min_profit_frac) * ratios.chaos_to_exalt;
-    // let div_chaos_frac = (1.0 + min_profit_frac) * ratios.div_to_chaos;
+    let tc1 = &bridge_elem.0;
+    let tc2 = &bridge_elem.2;
+    let div_frac = min_profit_frac * ratios.div_to_exalt;
+    let chaos_frac = min_profit_frac * ratios.chaos_to_exalt;
+    let div_chaos_frac = min_profit_frac * ratios.div_to_chaos;
     match (tc1, tc2) {
         (TradingCurrencyType::Divine, TradingCurrencyType::Exalt) => {
-            bridge_elem.3 >= ratios.div_to_exalt
+            (bridge_elem.3 - ratios.div_to_exalt).abs() >= div_frac
         }
         (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt) => {
-            bridge_elem.3 >= ratios.chaos_to_exalt
+            (bridge_elem.3 - ratios.chaos_to_exalt).abs() >= chaos_frac
         }
         (TradingCurrencyType::Divine, TradingCurrencyType::Chaos) => {
-            bridge_elem.3 >= ratios.div_to_chaos
+            (bridge_elem.3 - ratios.div_to_chaos).abs() >= div_chaos_frac
         }
+        // (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => true,
         (_, _) => false,
     }
 }

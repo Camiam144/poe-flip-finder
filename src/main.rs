@@ -1,10 +1,7 @@
-// use rusqlite::{Connection, Result};
-
 use reqwest::blocking::Client;
 use std::cmp;
 use std::path::Path;
 
-// mod db;
 mod api;
 mod logic;
 mod models;
@@ -84,39 +81,31 @@ fn main() {
     let (hub_to_bridge, bridge_to_hub) = logic::build_hub_bridge_maps(&valid_bridges);
 
     let mut potential_profits = logic::build_bridges(&hub_to_bridge, &bridge_to_hub);
+    let min_profit_frac = 0.05;
 
-    potential_profits.retain(|elem| logic::eval_profit(elem, &base_rates));
+    potential_profits.retain(|elem| logic::eval_profit(elem, &base_rates, min_profit_frac));
     potential_profits.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap());
 
     let num_elements: usize = 10;
     let end_idx = cmp::min(num_elements, potential_profits.len());
 
+    // What I actually want here are either the highest margin items or the
+    // top N items from each bridge
     println!("Top vals:");
     for elem in &potential_profits[..end_idx] {
         println!(
-            "Hub 1 {} -> Bridge {} -> Hub 2 {} | margin {}",
+            "Hub 1 {} -> Bridge {} -> Hub 2 {} | normalized exalt price  {}",
             elem.0, elem.1, elem.2, elem.3
         )
     }
 
     potential_profits.reverse();
-
+    // Are the really low vals also an option, but in reverse?
     println!("Bottom vals:");
     for elem in &potential_profits[..end_idx] {
         println!(
-            "Hub 1 {} -> Bridge {} -> Hub 2 {} | margin {}",
+            "Hub 1 {} -> Bridge {} -> Hub 2 {} | normalized exalt price {}",
             elem.0, elem.1, elem.2, elem.3
         )
     }
-
-    // for elem in &valid_bridges[..=num_elements] {
-    //     println!(
-    //         "Curr 1: {} Curr 2: {}, RP 1: {}, RP 2: {} | Volume {}",
-    //         elem.currency_one.text,
-    //         elem.currency_two.text,
-    //         elem.currency_one_data.relative_price,
-    //         elem.currency_two_data.relative_price,
-    //         elem.volume
-    //     )
-    // }
 }
