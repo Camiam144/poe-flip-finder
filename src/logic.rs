@@ -1,41 +1,6 @@
-use std::collections::HashMap;
-use std::fs::{self, DirEntry, File};
-use std::io::BufWriter;
-use std::path::Path;
-
-use reqwest::blocking::Client;
-use serde::Serialize;
-
-use crate::api;
 use crate::models::api_models::ExchangeRecord;
 use crate::models::logic_models::{TradingCurrencyRates, TradingCurrencyType};
-
-pub fn get_freshest_data(
-    most_recent_epoch: u64,
-    list_cached_snapshots: &[std::fs::DirEntry],
-    client: &Client,
-    data_path: &Path,
-) -> Vec<ExchangeRecord> {
-    if check_if_snapshot_exists(most_recent_epoch, list_cached_snapshots) {
-        println!(
-            "We have the most recent snapshot, number {}",
-            &most_recent_epoch
-        );
-        let filename = format!("response_{}.json", &most_recent_epoch);
-        let json_file: std::fs::File =
-            std::fs::File::open(data_path.join(filename)).expect("Couldn't open json: ");
-        let reader: std::io::BufReader<std::fs::File> = std::io::BufReader::new(json_file);
-        serde_json::from_reader(reader).expect("Couldn't deserialize json: ")
-    } else {
-        println!("We do not have the most recent snapshot, getting newest pairs");
-        let fresh_data =
-            api::get_newest_snapshot_pairs(client).expect("Couldn't get newest set of pairs: ");
-        // After we get them cache them to disk so we don't get banned from the api
-        let filename = format!("response_{}.json", &most_recent_epoch);
-        cache_to_disk(&fresh_data, data_path, &filename).expect("Couldn't cache snapshot to disk:");
-        fresh_data
-    }
-}
+use std::collections::HashMap;
 
 pub fn get_base_prices(records: &[ExchangeRecord], rates: &mut TradingCurrencyRates) {
     for record in records {
@@ -51,50 +16,6 @@ pub fn get_base_prices(records: &[ExchangeRecord], rates: &mut TradingCurrencyRa
         }
     }
     rates.div_to_chaos = rates.div_to_exalt / rates.chaos_to_exalt
-}
-
-pub fn list_all_snapshots(path: &Path) -> Vec<DirEntry> {
-    let paths = fs::read_dir(path).unwrap();
-    let mut out_vec: Vec<DirEntry> = vec![];
-    for file_name in paths.filter(|f| {
-        f.as_ref().unwrap().path().is_file()
-            && f.as_ref().unwrap().path().extension().unwrap() == "json"
-    }) {
-        out_vec.push(file_name.unwrap());
-    }
-    out_vec
-}
-
-fn get_snapshot_number_from_name(snapshot_name: &str) -> Option<u64> {
-    let underscore_idx = snapshot_name.find("_")?;
-    let dot_idx = snapshot_name.find(".")?;
-    snapshot_name[underscore_idx + 1..dot_idx]
-        .parse::<u64>()
-        .ok()
-}
-
-pub fn check_if_snapshot_exists(newest_snapshot: u64, snapshot_list: &[DirEntry]) -> bool {
-    for snapshot in snapshot_list {
-        if newest_snapshot
-            == get_snapshot_number_from_name(snapshot.file_name().to_str().unwrap()).unwrap()
-        {
-            return true;
-        }
-    }
-    false
-}
-
-pub fn cache_to_disk(
-    data: &impl Serialize,
-    path_dir: &Path,
-    filename: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let file_path = path_dir.join(filename);
-    let file = File::create(file_path)?;
-    let writer = BufWriter::new(file);
-
-    serde_json::to_writer(writer, data)?;
-    Ok(())
 }
 // What do we have to do once we have the values?
 // I think we're going to iterate over the filtered vector one time
@@ -119,7 +40,7 @@ pub fn build_hub_bridge_maps(
     for record in records {
         if let Some((hub, hub_ex, bridge_str, bridge_ex)) = record.hub_bridge_price() {
             let hub_per_bridge_ratio = hub_ex / bridge_ex;
-            hub_to_bridge.insert((hub.clone(), bridge_str.clone()), hub_per_bridge_ratio);
+            hub_to_bridge.insert((hub, bridge_str.clone()), hub_per_bridge_ratio);
             bridge_to_hub.insert((bridge_str, hub), hub_per_bridge_ratio.recip());
         }
     }

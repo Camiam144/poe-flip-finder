@@ -1,4 +1,5 @@
 use reqwest::blocking::Client;
+use std::fs;
 use std::path::Path;
 
 mod api;
@@ -28,9 +29,9 @@ fn main() {
 
     let data_path: &Path = Path::new("data");
 
-    let cached_snapshots: Vec<std::fs::DirEntry> = logic::list_all_snapshots(data_path);
+    let cached_snapshots: Vec<fs::DirEntry> = api::list_all_snapshots(data_path);
 
-    let newest_pairs: Vec<ExchangeRecord> = logic::get_freshest_data(
+    let newest_pairs: Vec<ExchangeRecord> = api::get_freshest_data(
         most_recent_snapshot.epoch,
         &cached_snapshots,
         &client,
@@ -63,7 +64,6 @@ fn main() {
     potential_profits.sort_by(|a, b| b.3.abs().total_cmp(&a.3.abs()));
 
     let num_elements: usize = 15;
-    // let end_idx = cmp::min(num_elements, potential_profits.len());
 
     // What I actually want here are either the highest margin items or the
     // top N items from each bridge
