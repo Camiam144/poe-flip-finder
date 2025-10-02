@@ -2,20 +2,22 @@ use crate::models::api_models::ExchangeRecord;
 use crate::models::logic_models::{TradingCurrencyRates, TradingCurrencyType};
 use std::collections::HashMap;
 
-pub fn get_base_prices(records: &[ExchangeRecord], rates: &mut TradingCurrencyRates) {
+pub fn get_base_prices(records: &[ExchangeRecord]) -> TradingCurrencyRates {
+    let mut rates = TradingCurrencyRates::default();
     for record in records {
         let currency_pair = record.trading_currency();
         match currency_pair {
             (TradingCurrencyType::Divine, TradingCurrencyType::Exalt) => {
-                rates.div_to_exalt = record.currency_one_data.relative_price
+                rates.div_to_exalt = record.currency_one_data.relative_price;
             }
             (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt) => {
-                rates.chaos_to_exalt = record.currency_one_data.relative_price
+                rates.chaos_to_exalt = record.currency_one_data.relative_price;
             }
             (_, _) => {}
         }
     }
-    rates.div_to_chaos = rates.div_to_exalt / rates.chaos_to_exalt
+    rates.div_to_chaos = rates.div_to_exalt / rates.chaos_to_exalt;
+    rates
 }
 // What do we have to do once we have the values?
 // I think we're going to iterate over the filtered vector one time
