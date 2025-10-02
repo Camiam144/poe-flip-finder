@@ -2,21 +2,24 @@ use reqwest::blocking::Client;
 use std::path::Path;
 
 mod api;
+mod app;
 mod logic;
 mod models;
 
-use models::api_models::{ExchangeRecord, ExchangeSnapshot};
-use models::logic_models::TradingCurrencyRates;
-
-use crate::models::logic_models::TradingCurrencyType;
+use crate::app::App;
+use crate::models::api_models::{ExchangeRecord, ExchangeSnapshot};
+use crate::models::logic_models::{TradingCurrencyRates, TradingCurrencyType};
 
 fn main() {
+    let mut app = App::default();
+    app.set_volume(200.0);
     let client: Client = reqwest::blocking::Client::builder()
         .user_agent("poe-flip-finder/1.0-camiam144@gmail.com")
         .build()
         .expect("Couldn't build client: ");
 
-    let most_recent_snapshot: ExchangeSnapshot = api::get_exchange_snapshot(&client).unwrap();
+    let most_recent_snapshot: ExchangeSnapshot =
+        api::get_exchange_snapshot(&client).expect("Couldn't get newest snapshot: ");
 
     println!(
         "Most recent snapshot number: {}",
@@ -44,7 +47,7 @@ fn main() {
     println!("Chaos to Exalt ratio {:?}", &base_rates.chaos_to_exalt);
 
     // These will be configurable via cmd line at some point probably
-    let min_vol: f64 = 5000.0;
+    let min_vol: f64 = 7500.0;
 
     let valid_bridges: Vec<ExchangeRecord> = newest_pairs
         .into_iter()
@@ -57,7 +60,7 @@ fn main() {
     let min_profit_frac = 0.05;
 
     potential_profits.retain(|elem| logic::eval_profit(elem, &base_rates, min_profit_frac));
-    potential_profits.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap());
+    potential_profits.sort_by(|a, b| b.3.abs().total_cmp(&a.3.abs()));
 
     let num_elements: usize = 15;
     // let end_idx = cmp::min(num_elements, potential_profits.len());
