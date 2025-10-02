@@ -13,7 +13,8 @@ use crate::models::logic_models::{TradingCurrencyRates, TradingCurrencyType};
 
 fn main() {
     let mut app = App::default();
-    app.set_volume(200.0);
+    app.run();
+    std::process::exit(0);
     let client: Client = reqwest::blocking::Client::builder()
         .user_agent("poe-flip-finder/1.0-camiam144@gmail.com")
         .build()
