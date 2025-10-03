@@ -58,16 +58,23 @@ pub fn get_snapshot_number_from_name(snapshot_name: &str) -> Result<u64, std::nu
     let dot_idx = snapshot_name.find(".").unwrap();
     snapshot_name[underscore_idx + 1..dot_idx].parse::<u64>()
 }
-pub fn list_all_snapshots(path: &Path) -> Vec<fs::DirEntry> {
-    let paths = fs::read_dir(path).unwrap();
-    let mut out_vec: Vec<fs::DirEntry> = vec![];
-    for file_name in paths.filter(|f| {
-        f.as_ref().unwrap().path().is_file()
-            && f.as_ref().unwrap().path().extension().unwrap() == "json"
-    }) {
-        out_vec.push(file_name.unwrap());
+
+pub fn list_all_snapshots(path: &Path) -> Result<Vec<fs::DirEntry>, io::Error> {
+    let mut out_vec: Vec<fs::DirEntry> = Vec::new();
+    for entry_result in fs::read_dir(path)? {
+        let entry = entry_result?;
+        // This bit stolen from BurntSushi on the rust forums
+        if entry.path().is_file()
+            && entry
+                .path()
+                .extension()
+                .map(|ext| ext == "json")
+                .unwrap_or(false)
+        {
+            out_vec.push(entry);
+        }
     }
-    out_vec
+    Ok(out_vec)
 }
 
 pub fn check_if_snapshot_exists(newest_snapshot: u64, snapshot_list: &[fs::DirEntry]) -> bool {

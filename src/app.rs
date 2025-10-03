@@ -1,14 +1,17 @@
 use std::{
     fs,
     io::{self, Error, Write},
-    path::Path,
+    path::PathBuf,
 };
 
 use reqwest::blocking::Client;
 
 use crate::{
     api, logic,
-    models::logic_models::{TradingCurrencyRates, TradingCurrencyType},
+    models::{
+        api_models::ExchangeRecord,
+        logic_models::{TradingCurrencyRates, TradingCurrencyType},
+    },
 };
 
 pub struct App {
@@ -17,16 +20,29 @@ pub struct App {
     min_profit_frac: f64,
     top: usize,
     client: Option<Client>,
+    data_path: PathBuf,
+
+    // Non-user facing data
+    current_snapshot: Option<u64>,
+    current_records: Option<Vec<ExchangeRecord>>,
+    base_rates: TradingCurrencyRates,
+    results: Option<Vec<(TradingCurrencyType, String, TradingCurrencyType, f64)>>,
 }
 
 impl App {
-    pub const fn default() -> Self {
+    pub fn default() -> Self {
         Self {
             should_quit: false,
             min_volume: 1000.0,
             min_profit_frac: 0.05,
             top: 10,
             client: None,
+            data_path: PathBuf::from("data"),
+
+            current_snapshot: None,
+            current_records: None,
+            base_rates: TradingCurrencyRates::default(),
+            results: None,
         }
     }
 
@@ -35,7 +51,10 @@ impl App {
         println!("Running initial setup...");
         println!("Use help for valid commands");
         let client = Some(self.build_client().expect("Couldn't create client: "));
-        self.client = client
+        self.client = client;
+        self.refresh_data_if_needed().unwrap();
+        self.recalculate();
+        self.display_results();
     }
 
     pub fn run(&mut self) {
@@ -99,6 +118,8 @@ impl App {
                     if let Ok(vol) = arg.parse::<f64>() {
                         self.min_volume = vol;
                         println!("Min volume set {vol}");
+                        self.recalculate();
+                        self.display_results();
                     } else {
                         println!("Invalid setting for volume, use an integer.");
                     }
@@ -109,6 +130,8 @@ impl App {
                     if let Ok(profit) = arg.parse::<f64>() {
                         self.min_profit_frac = profit;
                         println!("Min profit frac set to {profit}");
+                        self.recalculate();
+                        self.display_results();
                     } else {
                         println!("Invalid setting for profit.");
                     }
@@ -119,51 +142,58 @@ impl App {
                     if let Ok(top) = arg.parse::<usize>() {
                         self.top = top;
                         println!("Displaying top {top} results.");
+                        self.display_results();
                     } else {
                         println!("Invalid value for top, use int.")
                     }
                 }
             }
             Some("refresh") => {
-                self.refresh_data();
+                if let Err(e) = self.refresh_data_if_needed() {
+                    eprintln!("Error refreshing data: {e}");
+                } else {
+                    self.display_results();
+                }
             }
             Some("quit") | Some("exit") => self.should_quit = true,
             Some(other) => println!("Unknown command: {other}"),
             None => {}
         };
     }
-    pub fn refresh_data(&mut self) {
+
+    pub fn refresh_data_if_needed(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let client = self.client.as_ref().unwrap();
 
         let most_recent_snapshot =
             api::get_exchange_snapshot(client).expect("Couldn't get newest snapshot: ");
+        let newest_snapshot = most_recent_snapshot.epoch;
 
-        println!(
-            "Most recent snapshot number: {}",
-            &most_recent_snapshot.epoch
-        );
+        if self.current_snapshot != Some(newest_snapshot) {
+            println!("Refreshing data, newest snapshot {newest_snapshot}");
 
-        let data_path: &Path = Path::new("data");
+            let cached_snapshots: Vec<fs::DirEntry> = api::list_all_snapshots(&self.data_path)?;
 
-        let cached_snapshots: Vec<fs::DirEntry> = api::list_all_snapshots(data_path);
+            self.current_records = Some(api::get_freshest_data(
+                most_recent_snapshot.epoch,
+                &cached_snapshots,
+                client,
+                &self.data_path,
+            ));
+            self.current_snapshot = Some(newest_snapshot);
+        } else {
+            println!("Already have newest snapshot {}", newest_snapshot);
+        }
 
-        let newest_pairs = api::get_freshest_data(
-            most_recent_snapshot.epoch,
-            &cached_snapshots,
-            client,
-            data_path,
-        );
+        Ok(())
+    }
 
-        let base_rates = logic::get_base_prices(&newest_pairs);
-        println!("Divine to Exalt ratio {:?}", &base_rates.div_to_exalt);
-        println!("Divine to Chaos ratio {:?}", &base_rates.div_to_chaos);
-        println!("Chaos to Exalt ratio {:?}", &base_rates.chaos_to_exalt);
+    pub fn recalculate(&mut self) {
+        // TODO: This bit shouldn't print as part of the logic
+        let current_records = &self.current_records.as_ref().unwrap();
+        self.base_rates = logic::get_base_prices(current_records);
 
-        // TODO: below this line should probably be in a new function as
-        // this is all now program logic that isn't related to refreshing data.
-
-        let valid_bridges: Vec<_> = newest_pairs
-            .into_iter()
+        let valid_bridges: Vec<_> = current_records
+            .iter()
             .filter(|exch| exch.volume >= self.min_volume && exch.is_valid_bridge())
             .collect();
 
@@ -171,26 +201,27 @@ impl App {
         let mut potential_profits = logic::build_bridges(&hub_to_bridge, &bridge_to_hub);
 
         potential_profits
-            .retain(|elem| logic::eval_profit(elem, &base_rates, self.min_profit_frac));
+            .retain(|elem| logic::eval_profit(elem, &self.base_rates, self.min_profit_frac));
         potential_profits.sort_by(|a, b| b.3.abs().total_cmp(&a.3.abs()));
-
-        self.display_results(potential_profits, &base_rates);
+        self.results = Some(potential_profits.clone());
     }
-    pub fn display_results(
-        &self,
-        results: Vec<(TradingCurrencyType, String, TradingCurrencyType, f64)>,
-        base_rates: &TradingCurrencyRates,
-    ) {
+
+    pub fn display_results(&self) {
+        println!("Divine to Exalt ratio {:?}", &self.base_rates.div_to_exalt);
+        println!("Divine to Chaos ratio {:?}", &self.base_rates.div_to_chaos);
+        println!("Chaos to Exalt ratio {:?}", &self.base_rates.chaos_to_exalt);
+
         for currency in [TradingCurrencyType::Divine, TradingCurrencyType::Chaos] {
             println!("Top {} vals:", currency);
             let rate = match currency {
-                TradingCurrencyType::Divine => base_rates.div_to_exalt,
-                TradingCurrencyType::Chaos => base_rates.chaos_to_exalt,
-                TradingCurrencyType::Exalt => 1.0 / base_rates.div_to_exalt,
+                TradingCurrencyType::Divine => self.base_rates.div_to_exalt,
+                TradingCurrencyType::Chaos => self.base_rates.chaos_to_exalt,
+                TradingCurrencyType::Exalt => 1.0 / self.base_rates.div_to_exalt,
                 TradingCurrencyType::Other => 0.0,
             };
-            let to_print = logic::get_top_items(&results, &currency, self.top);
-            for elem in to_print {
+            let top_n_items =
+                logic::get_top_items(self.results.as_ref().unwrap(), &currency, self.top);
+            for elem in top_n_items {
                 println!(
                     "{curr1:<7.7} -> {bridge:^25.25} -> {curr2:<8} | effective ratio: {ratio:>5.1} | profit {profit:>5.1} exalt",
                     curr1 = elem.0,

@@ -29,7 +29,7 @@ pub fn get_base_prices(records: &[ExchangeRecord]) -> TradingCurrencyRates {
 // pretty print the output? We need to compute the expected return at some point.
 
 pub fn build_hub_bridge_maps(
-    records: &[ExchangeRecord],
+    records: &[&ExchangeRecord],
 ) -> (
     HashMap<(TradingCurrencyType, String), f64>,
     HashMap<(String, TradingCurrencyType), f64>,
@@ -88,27 +88,27 @@ pub fn build_bridges(
 }
 
 pub fn eval_profit(
-    bridge_elem: &(TradingCurrencyType, String, TradingCurrencyType, f64),
+    (tc1, _, tc2, rate): &(TradingCurrencyType, String, TradingCurrencyType, f64),
     ratios: &TradingCurrencyRates,
     min_profit_frac: f64,
 ) -> bool {
-    let tc1 = &bridge_elem.0;
-    let tc2 = &bridge_elem.2;
-    let div_frac = min_profit_frac * ratios.div_to_exalt;
-    let chaos_frac = min_profit_frac * ratios.chaos_to_exalt;
-    let div_chaos_frac = min_profit_frac * ratios.div_to_chaos;
-    match (tc1, tc2) {
-        (TradingCurrencyType::Divine, TradingCurrencyType::Exalt) => {
-            (bridge_elem.3 - ratios.div_to_exalt).abs() >= div_frac
-        }
-        (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt) => {
-            (bridge_elem.3 - ratios.chaos_to_exalt).abs() >= chaos_frac
-        }
-        (TradingCurrencyType::Divine, TradingCurrencyType::Chaos) => {
-            (bridge_elem.3 - ratios.div_to_chaos).abs() >= div_chaos_frac
-        }
-        // (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => true,
-        (_, _) => false,
+    // Profitabilty is determined by whether or not trading through the bridge
+    // has an expected profit of at least `min_profit_frac` * the hub ratio.
+    // This allows for flexible thresholding, for example in mid league the
+    // div to exalt ratio can easily be 1:400, while the chaos to exalt ratio
+    // might be closer to 1:12, setting a constant limit wouldn't show the chaos
+    // trades as potentially profitable.
+    let expected_hub_rate = match (tc1, tc2) {
+        (TradingCurrencyType::Divine, TradingCurrencyType::Exalt) => Some(ratios.div_to_exalt),
+        (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt) => Some(ratios.chaos_to_exalt),
+        (TradingCurrencyType::Divine, TradingCurrencyType::Chaos) => Some(ratios.div_to_chaos),
+        _ => None,
+    };
+
+    if let Some(hub_rate) = expected_hub_rate {
+        (rate - hub_rate).abs() >= min_profit_frac * hub_rate
+    } else {
+        false
     }
 }
 
@@ -117,10 +117,12 @@ pub fn get_top_items(
     currency: &TradingCurrencyType,
     num_items: usize,
 ) -> Vec<(TradingCurrencyType, String, TradingCurrencyType, f64)> {
-    all_items
-        .iter()
+    let mut output = all_items.to_vec();
+    output.sort_by(|a, b| b.3.abs().total_cmp(&a.3.abs()));
+
+    output
+        .into_iter()
         .filter(|(tc1, _, _, _)| tc1 == currency)
         .take(num_items)
-        .cloned()
         .collect()
 }
