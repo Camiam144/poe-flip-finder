@@ -84,10 +84,6 @@ impl App {
         Ok(())
     }
 
-    // pub fn set_volume(&mut self, vol: f64) {
-    //     self.min_volume = vol;
-    // }
-
     pub fn build_client(&self) -> Result<reqwest::blocking::Client, reqwest::Error> {
         reqwest::blocking::Client::builder()
             .user_agent("poe-flip-finder/1.0-camiam144@gmail.com")
@@ -188,8 +184,9 @@ impl App {
     }
 
     pub fn recalculate(&mut self) {
-        // TODO: This bit shouldn't print as part of the logic
-        let current_records = &self.current_records.as_ref().unwrap();
+        // calculate all valid bridges and potential profits.
+
+        let current_records = self.current_records.as_ref().unwrap();
         self.base_rates = logic::get_base_prices(current_records);
 
         let valid_bridges: Vec<_> = current_records
@@ -203,10 +200,14 @@ impl App {
         potential_profits
             .retain(|elem| logic::eval_profit(elem, &self.base_rates, self.min_profit_frac));
         potential_profits.sort_by(|a, b| b.3.abs().total_cmp(&a.3.abs()));
-        self.results = Some(potential_profits.clone());
+        self.results = Some(potential_profits);
     }
 
     pub fn display_results(&self) {
+        println!(
+            "Settings => Vol: {} Profit: {} Res Shown: {}",
+            &self.min_volume, &self.min_profit_frac, &self.top
+        );
         println!("Divine to Exalt ratio {:?}", &self.base_rates.div_to_exalt);
         println!("Divine to Chaos ratio {:?}", &self.base_rates.div_to_chaos);
         println!("Chaos to Exalt ratio {:?}", &self.base_rates.chaos_to_exalt);
