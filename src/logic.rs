@@ -28,12 +28,12 @@ pub fn get_base_prices(records: &[ExchangeRecord]) -> TradingCurrencyRates {
 // push that into a new vec. Sort that vec by absolute difference, then we can
 // pretty print the output? We need to compute the expected return at some point.
 
-pub fn build_hub_bridge_maps(
-    records: &[&ExchangeRecord],
-) -> (
+type HubBridgeMap = (
     HashMap<(TradingCurrencyType, String), f64>,
     HashMap<(String, TradingCurrencyType), f64>,
-) {
+);
+
+pub fn build_hub_bridge_maps(records: &[&ExchangeRecord]) -> HubBridgeMap {
     // Build our lookup tables here so it's faster to scan every single
     // combination instead of looping through the vec of records a bazillion times
     let mut hub_to_bridge = HashMap::new();
