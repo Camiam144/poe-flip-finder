@@ -1,11 +1,13 @@
 mod api;
 mod app;
+mod auth;
 mod logic;
 mod models;
 
 use app::App;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut app = App::default();
-    app.run();
+    app.run().await;
 }

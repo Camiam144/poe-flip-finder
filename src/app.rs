@@ -1,13 +1,16 @@
 use std::{
     fs,
-    io::{self, Error, Write},
+    io::{self, Write},
     path::PathBuf,
 };
 
-use reqwest::blocking::Client;
+use anyhow::{Error, Result};
+
+use reqwest::Client;
 
 use crate::{
-    api, logic,
+    api::{self, test_ggg_api},
+    auth, logic,
     models::{
         api_models::ExchangeRecord,
         logic_models::{TradingCurrencyRates, TradingCurrencyType},
@@ -46,24 +49,24 @@ impl App {
         }
     }
 
-    pub fn initialize(&mut self) {
+    pub async fn initialize(&mut self) {
         println!("Welcome to POE 2 FLIP FINDER!");
         println!("Running initial setup...");
         println!("Use help for valid commands");
         let client = Some(self.build_client().expect("Couldn't create client: "));
         self.client = client;
-        self.refresh_data_if_needed().unwrap();
+        self.refresh_data_if_needed().await.unwrap();
         self.recalculate();
         self.display_results();
     }
 
-    pub fn run(&mut self) {
-        self.initialize();
-        let result = self.repl();
+    pub async fn run(&mut self) {
+        self.initialize().await;
+        let result = self.repl().await;
         result.unwrap()
     }
 
-    pub fn repl(&mut self) -> Result<(), Error> {
+    pub async fn repl(&mut self) -> Result<(), Error> {
         loop {
             // I'm using built in libraries for now, this could always
             // be grabbed from a different crate later.
@@ -79,18 +82,18 @@ impl App {
                 continue;
             }
             let cmd = line.trim();
-            self.handle_command(cmd);
+            self.handle_command(cmd).await?;
         }
         Ok(())
     }
 
-    pub fn build_client(&self) -> Result<reqwest::blocking::Client, reqwest::Error> {
-        reqwest::blocking::Client::builder()
-            .user_agent("poe-flip-finder/1.0-camiam144@gmail.com")
+    pub fn build_client(&self) -> Result<reqwest::Client, reqwest::Error> {
+        reqwest::Client::builder()
+            .user_agent("Oauth poeflipfinder/0.0.1 (contact: camiam144@gmail.com)")
             .build()
     }
 
-    pub fn handle_command(&mut self, cmd: &str) {
+    pub async fn handle_command(&mut self, cmd: &str) -> Result<(), Error> {
         // right now, valid commands are:
         // volume #
         // profit #.#
@@ -145,23 +148,36 @@ impl App {
                 }
             }
             Some("refresh") => {
-                if let Err(e) = self.refresh_data_if_needed() {
+                if let Err(e) = self.refresh_data_if_needed().await {
                     eprintln!("Error refreshing data: {e}");
                 } else {
                     self.display_results();
+                }
+            }
+            Some("GGG") => {
+                if let Err(e) = self.test_ggg().await {
+                    println!("GGG not ok {e}");
+                } else {
+                    println!("GGG gud");
                 }
             }
             Some("quit") | Some("exit") => self.should_quit = true,
             Some(other) => println!("Unknown command: {other}"),
             None => {}
         };
+        Ok(())
     }
 
-    pub fn refresh_data_if_needed(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn test_ggg(&self) -> Result<()> {
+        println!("Testing GGG");
+        test_ggg_api(self.client.as_ref().unwrap()).await?;
+        Ok(())
+    }
+
+    pub async fn refresh_data_if_needed(&mut self) -> Result<(), anyhow::Error> {
         let client = self.client.as_ref().unwrap();
 
-        let most_recent_snapshot =
-            api::get_exchange_snapshot(client).expect("Couldn't get newest snapshot: ");
+        let most_recent_snapshot = api::get_exchange_snapshot(client).await?;
         let newest_snapshot = most_recent_snapshot.epoch;
 
         if self.current_snapshot != Some(newest_snapshot) {
@@ -169,12 +185,15 @@ impl App {
 
             let cached_snapshots: Vec<fs::DirEntry> = api::list_all_snapshots(&self.data_path)?;
 
-            self.current_records = Some(api::get_freshest_data(
-                most_recent_snapshot.epoch,
-                &cached_snapshots,
-                client,
-                &self.data_path,
-            ));
+            self.current_records = Some(
+                api::get_freshest_data(
+                    most_recent_snapshot.epoch,
+                    &cached_snapshots,
+                    client,
+                    &self.data_path,
+                )
+                .await?,
+            );
             self.current_snapshot = Some(newest_snapshot);
         } else {
             println!("Already have newest snapshot {}", newest_snapshot);

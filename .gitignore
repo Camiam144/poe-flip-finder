@@ -2,4 +2,6 @@
 /data
 .DS_Store
 relative_price_expl.txt
-.secrets
+.env
+.token
+creds.json

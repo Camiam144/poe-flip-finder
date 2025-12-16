@@ -1,36 +1,63 @@
-use reqwest::blocking::Client;
+use anyhow::Context;
+use anyhow::Result;
+use reqwest::Client;
+use reqwest::Url;
+use reqwest::header::AUTHORIZATION;
 use serde::Serialize;
+use serde_json::Value;
 use std::fs;
 use std::io;
 use std::path::Path;
 
+use crate::auth;
 use crate::models::api_models::{ExchangeRecord, ExchangeSnapshot};
 
 // TODO: Eventually want to pass the league into these requests
 
-pub fn get_exchange_snapshot(client: &Client) -> reqwest::Result<ExchangeSnapshot> {
+pub async fn test_ggg_api(client: &Client) -> Result<()> {
+    // TODO: find a way to get the unix timestamp code of the most recent hour
+    // gotta do oauth here
+    let token = auth::get_cxapi_cred().await?;
+
+    println!("Pinging GGG for new data");
+    let url = Url::parse("https://api.pathofexile.com/currency-exchange/poe2/1765839600").unwrap();
+    let response = client
+        .get(url)
+        .header(AUTHORIZATION, format!("Bearer {}", token.access_token))
+        .send()
+        .await?;
+
+    let this_json: Value = response.json().await?;
+
+    // TODO: this needs to get parsed into a struct and cached to disk like the others
+    // then need to filter on league
+
+    println!("GGG Response {:#?}", this_json);
+
+    Ok(())
+}
+
+pub async fn get_exchange_snapshot(client: &Client) -> Result<ExchangeSnapshot> {
     let url = "https://poe2scout.com/api/currencyExchangeSnapshot?league=Rise%20of%20the%20Abyssal";
 
-    let response = client.get(url).send()?;
-    response.error_for_status_ref()?;
-    response.json()
+    let response = client.get(url).send().await?.json().await?;
+    Ok(response)
 }
 
-pub fn get_newest_snapshot_pairs(client: &Client) -> reqwest::Result<Vec<ExchangeRecord>> {
+pub async fn get_newest_snapshot_pairs(client: &Client) -> Result<Vec<ExchangeRecord>> {
     let url =
-        "https://poe2scout.com/api/currencyExchange/SnapshotPairs?league=Rise%20of%20the%20Abyssal";
+        "https://poe2scout.com/api/currencyExchange/SnapshotPairs?league=Fate%20of%20the%Vaal";
 
-    let response = client.get(url).send()?;
-    response.error_for_status_ref()?;
-    response.json()
+    let response = client.get(url).send().await?.json().await?;
+    Ok(response)
 }
 
-pub fn get_freshest_data(
+pub async fn get_freshest_data(
     most_recent_epoch: u64,
     list_cached_snapshots: &[fs::DirEntry],
     client: &Client,
     data_path: &Path,
-) -> Vec<ExchangeRecord> {
+) -> Result<Vec<ExchangeRecord>> {
     // TODO: error handling.
     if check_if_snapshot_exists(most_recent_epoch, list_cached_snapshots) {
         println!(
@@ -38,18 +65,17 @@ pub fn get_freshest_data(
             &most_recent_epoch
         );
         let filename = format!("response_{}.json", &most_recent_epoch);
-        let json_file: fs::File =
-            fs::File::open(data_path.join(filename)).expect("Couldn't open json: ");
+        let json_file: fs::File = fs::File::open(data_path.join(filename))?;
         let reader: io::BufReader<fs::File> = io::BufReader::new(json_file);
-        serde_json::from_reader(reader).expect("Couldn't deserialize json: ")
+        serde_json::from_reader(reader).context("Couldn't parse json from file.")
     } else {
         println!("We do not have the most recent snapshot, getting newest pairs");
-        let fresh_data =
-            get_newest_snapshot_pairs(client).expect("Couldn't get newest set of pairs: ");
+        let fresh_data = get_newest_snapshot_pairs(client).await?;
         // After we get them cache them to disk so we don't get banned from the api
         let filename = format!("response_{}.json", &most_recent_epoch);
-        cache_to_disk(&fresh_data, data_path, &filename).expect("Couldn't cache snapshot to disk:");
-        fresh_data
+        let file_path = data_path.join(filename);
+        cache_to_disk(&fresh_data, &file_path).context("Couldn't cache snapshot to disk:")?;
+        Ok(fresh_data)
     }
 }
 
@@ -89,12 +115,7 @@ pub fn check_if_snapshot_exists(newest_snapshot: u64, snapshot_list: &[fs::DirEn
     false
 }
 
-pub fn cache_to_disk(
-    data: &impl Serialize,
-    path_dir: &Path,
-    filename: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let file_path = path_dir.join(filename);
+pub fn cache_to_disk(data: &impl Serialize, file_path: &Path) -> Result<()> {
     let file = fs::File::create(file_path)?;
     let writer = io::BufWriter::new(file);
 

@@ -137,6 +137,8 @@ pub struct ExchangeSnapshot {
     pub volume: f64,
 }
 
+// These are the models for the offical GGG api
+
 #[cfg(test)]
 mod tests {
     use super::*;
