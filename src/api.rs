@@ -1,44 +1,59 @@
 use anyhow::Context;
+use anyhow::Ok;
 use anyhow::Result;
 use reqwest::Client;
-use reqwest::Url;
 use reqwest::header::AUTHORIZATION;
 use serde::Serialize;
-use serde_json::Value;
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use crate::auth;
-use crate::models::api_models::{ExchangeRecord, ExchangeSnapshot};
+use crate::models::api_models::{
+    ExchangeRecord, ExchangeSnapshot, GGGMarket, Market, RawCxApiResponse,
+};
 
-// TODO: Eventually want to pass the league into these requests
-
-pub async fn test_ggg_api(client: &Client) -> Result<()> {
-    // TODO: find a way to get the unix timestamp code of the most recent hour
-    // gotta do oauth here
+pub async fn get_most_recent_cxapi(client: &Client) -> Result<GGGMarket> {
     let token = auth::get_cxapi_cred().await?;
+    let past_hour = (SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        / 3600)
+        * 3600
+        - 3600;
+    println!("Calced timestamp: {}", past_hour);
+    let base_url = "https://api.pathofexile.com/currency-exchange/poe2/";
 
-    println!("Pinging GGG for new data");
-    let url = Url::parse("https://api.pathofexile.com/currency-exchange/poe2/1765839600").unwrap();
+    let url = format!("{}{}", base_url, past_hour);
+
     let response = client
         .get(url)
         .header(AUTHORIZATION, format!("Bearer {}", token.access_token))
         .send()
         .await?;
 
-    let this_json: Value = response.json().await?;
+    let raw_data: RawCxApiResponse = response.json().await?;
 
-    // TODO: this needs to get parsed into a struct and cached to disk like the others
-    // then need to filter on league
+    // println!("GGG Response {:#?}", this_json);
 
-    println!("GGG Response {:#?}", this_json);
+    let parsed_markets: Result<Vec<Market>, anyhow::Error> = raw_data
+        .markets
+        .into_iter()
+        .map(|m| Market::from_raw(m).context("Couldn't parse"))
+        .collect();
 
-    Ok(())
+    Ok(GGGMarket {
+        next_change_id: raw_data.next_change_id,
+        markets: parsed_markets?,
+    })
 }
 
+// TODO: Eventually want to pass the league into these requests
 pub async fn get_exchange_snapshot(client: &Client) -> Result<ExchangeSnapshot> {
-    let url = "https://poe2scout.com/api/currencyExchangeSnapshot?league=Rise%20of%20the%20Abyssal";
+    let url = "https://poe2scout.com/api/currencyExchangeSnapshot?league=Fate%20of%20the%20Vaal";
 
     let response = client.get(url).send().await?.json().await?;
     Ok(response)
@@ -80,12 +95,16 @@ pub async fn get_freshest_data(
 }
 
 pub fn get_snapshot_number_from_name(snapshot_name: &str) -> Result<u64, std::num::ParseIntError> {
-    let underscore_idx = snapshot_name.find("_").unwrap();
-    let dot_idx = snapshot_name.find(".").unwrap();
+    let underscore_idx = snapshot_name
+        .find("_")
+        .expect("Name must contain an underscore");
+    let dot_idx = snapshot_name
+        .find(".")
+        .expect("Name must contain a \".\" separating the file ext");
     snapshot_name[underscore_idx + 1..dot_idx].parse::<u64>()
 }
 
-pub fn list_all_snapshots(path: &Path) -> Result<Vec<fs::DirEntry>, io::Error> {
+pub fn list_all_snapshots(path: &Path) -> Result<Vec<fs::DirEntry>> {
     let mut out_vec: Vec<fs::DirEntry> = Vec::new();
     for entry_result in fs::read_dir(path)? {
         let entry = entry_result?;
@@ -103,11 +122,17 @@ pub fn list_all_snapshots(path: &Path) -> Result<Vec<fs::DirEntry>, io::Error> {
     Ok(out_vec)
 }
 
-pub fn check_if_snapshot_exists(newest_snapshot: u64, snapshot_list: &[fs::DirEntry]) -> bool {
+pub fn check_if_snapshot_exists(snapshot_to_check: u64, snapshot_list: &[fs::DirEntry]) -> bool {
     // TODO: Error handling
     for snapshot in snapshot_list {
-        if newest_snapshot
-            == get_snapshot_number_from_name(snapshot.file_name().to_str().unwrap()).unwrap()
+        if snapshot_to_check
+            == get_snapshot_number_from_name(
+                snapshot
+                    .file_name()
+                    .to_str()
+                    .expect("Couldn't get filename"),
+            )
+            .expect("Couldn't get snapshot number")
         {
             return true;
         }

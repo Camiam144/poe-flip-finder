@@ -1,5 +1,6 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
+use anyhow::{Context, Ok, Result};
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_json::Value;
 
@@ -87,7 +88,7 @@ impl ExchangeRecord {
     }
 }
 
-#[allow(dead_code)]
+// #[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrencyInfo {
@@ -100,7 +101,7 @@ pub struct CurrencyInfo {
     pub icon_url: String,
 }
 
-#[allow(dead_code)]
+// #[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 pub struct CurrencyData {
@@ -114,18 +115,18 @@ pub struct CurrencyData {
     pub volume_traded: u64,
 }
 
-#[allow(dead_code)]
-#[derive(Debug)]
-pub struct ExchangeQueryResult {
-    pub ts: u64,
-    pub pair_id: u64,
-    pub snapshot_id: u64,
-    pub from_currency: String,
-    pub to_currency: String,
-    pub from_relative_price: f64,
-    pub to_relative_price: f64,
-    pub volume: f64,
-}
+// #[allow(dead_code)]
+// #[derive(Debug)]
+// pub struct ExchangeQueryResult {
+//     pub ts: u64,
+//     pub pair_id: u64,
+//     pub snapshot_id: u64,
+//     pub from_currency: String,
+//     pub to_currency: String,
+//     pub from_relative_price: f64,
+//     pub to_relative_price: f64,
+//     pub volume: f64,
+// }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -138,6 +139,80 @@ pub struct ExchangeSnapshot {
 }
 
 // These are the models for the offical GGG api
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CurrencyPairValues {
+    pub c1: (String, u64),
+    pub c2: (String, u64),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RawMarket {
+    pub league: String,
+    pub market_id: String, // This is pipe separated chaos|divine
+
+    pub volume_traded: HashMap<String, u64>,
+    pub highest_ratio: HashMap<String, u64>,
+    pub highest_stock: HashMap<String, u64>,
+    pub lowest_ratio: HashMap<String, u64>,
+    pub lowest_stock: HashMap<String, u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Market {
+    pub league: String,
+    pub curr_a: String,
+    pub curr_b: String,
+
+    pub volume_traded: CurrencyPairValues,
+    pub highest_ratio: CurrencyPairValues,
+    pub highest_stock: CurrencyPairValues,
+    pub lowest_ratio: CurrencyPairValues,
+    pub lowest_stock: CurrencyPairValues,
+}
+impl Market {
+    pub fn from_raw(raw: RawMarket) -> Result<Self> {
+        let (a, b) = raw
+            .market_id
+            .split_once('|')
+            .context("Couldn't split market on vertical bar")?;
+
+        Ok(Self {
+            curr_a: a.to_string(),
+            curr_b: b.to_string(),
+
+            league: raw.league,
+            volume_traded: Market::pair_from_map(&raw.volume_traded, a, b)?,
+            highest_ratio: Market::pair_from_map(&raw.highest_ratio, a, b)?,
+            highest_stock: Market::pair_from_map(&raw.highest_stock, a, b)?,
+            lowest_ratio: Market::pair_from_map(&raw.lowest_ratio, a, b)?,
+            lowest_stock: Market::pair_from_map(&raw.lowest_stock, a, b)?,
+        })
+    }
+    fn pair_from_map(
+        map: &HashMap<String, u64>,
+        curr_a: &str,
+        curr_b: &str,
+    ) -> Result<CurrencyPairValues> {
+        let val_a = map.get(curr_a).context("Couldn't find currency a in map")?;
+        let val_b = map.get(curr_b).context("Couldn't find currency b in map")?;
+
+        Ok(CurrencyPairValues {
+            c1: (curr_a.to_string(), *val_a),
+            c2: (curr_b.to_string(), *val_b),
+        })
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GGGMarket {
+    pub next_change_id: u64,
+    pub markets: Vec<Market>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RawCxApiResponse {
+    pub next_change_id: u64,
+    pub markets: Vec<RawMarket>,
+}
 
 #[cfg(test)]
 mod tests {

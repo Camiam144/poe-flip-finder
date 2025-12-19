@@ -9,8 +9,8 @@ use anyhow::{Error, Result};
 use reqwest::Client;
 
 use crate::{
-    api::{self, test_ggg_api},
-    auth, logic,
+    api::{self, get_most_recent_cxapi},
+    logic,
     models::{
         api_models::ExchangeRecord,
         logic_models::{TradingCurrencyRates, TradingCurrencyType},
@@ -170,7 +170,16 @@ impl App {
 
     pub async fn test_ggg(&self) -> Result<()> {
         println!("Testing GGG");
-        test_ggg_api(self.client.as_ref().unwrap()).await?;
+        let whole_market = get_most_recent_cxapi(self.client.as_ref().unwrap()).await?;
+        println!("Newest snapshot val {}", whole_market.next_change_id);
+
+        let first = whole_market
+            .markets
+            .iter()
+            .find(|m| m.league == "Fate of the Vaal");
+
+        println!("Found market {:?}", first);
+
         Ok(())
     }
 
