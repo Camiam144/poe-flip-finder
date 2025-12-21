@@ -2,7 +2,7 @@
 
 ## In Rust!
 
-Grabs some data from a public website that wraps POE2's currency exchange API and digs up some triple arbitrage opportunities.
+Uses the official GGG API to identify both arbitrage and market making opportunities.
 
-I wouldn't use this if I were you... 
+Eventually will be a backend for some sort of frontend probably.
 

@@ -1,22 +1,21 @@
-use anyhow::Context;
-use anyhow::Ok;
-use anyhow::Result;
+use anyhow::{Context, Ok, Result};
 use reqwest::Client;
 use reqwest::header::AUTHORIZATION;
 use serde::Serialize;
-use std::fs;
-use std::io;
 use std::path::Path;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::{fs, io};
 
 use crate::auth;
+use crate::auth::AuthorizedScopes;
 use crate::models::api_models::{
-    ExchangeRecord, ExchangeSnapshot, GGGMarket, Market, RawCxApiResponse,
+    ExchangeRecord, ExchangeSnapshot, GGGLeague, GGGLeagueList, GGGMarket, Market, RawCxApiResponse,
 };
 
 pub async fn get_most_recent_cxapi(client: &Client) -> Result<GGGMarket> {
-    let token = auth::get_cxapi_cred().await?;
+    // TODO: Should this auth stuff live in the "app" layer instead of getting
+    // called in each func?
+    let token = auth::get_api_token(&AuthorizedScopes::Cxapi).await?;
     let past_hour = (SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -24,7 +23,7 @@ pub async fn get_most_recent_cxapi(client: &Client) -> Result<GGGMarket> {
         / 3600)
         * 3600
         - 3600;
-    println!("Calced timestamp: {}", past_hour);
+    println!("Last hour timestamp: {}", past_hour);
     let base_url = "https://api.pathofexile.com/currency-exchange/poe2/";
 
     let url = format!("{}{}", base_url, past_hour);
@@ -51,6 +50,26 @@ pub async fn get_most_recent_cxapi(client: &Client) -> Result<GGGMarket> {
     })
 }
 
+pub async fn get_leagues(client: &Client, realm: &str) -> Result<GGGLeagueList> {
+    let token = auth::get_api_token(&AuthorizedScopes::Leagues).await?;
+    let url = "https://api.pathofexile.com/league";
+    let params = [("realm", realm)];
+    let url = reqwest::Url::parse_with_params(url, &params)?;
+    println!("Hitting url: {}", url);
+
+    let response = client
+        .get(url)
+        .header(AUTHORIZATION, format!("Bearer {}", token.access_token))
+        .send()
+        .await?;
+
+    println!("{:?}", response);
+
+    let result: GGGLeagueList = response.json().await?;
+
+    Ok(result)
+}
+
 // TODO: Eventually want to pass the league into these requests
 pub async fn get_exchange_snapshot(client: &Client) -> Result<ExchangeSnapshot> {
     let url = "https://poe2scout.com/api/currencyExchangeSnapshot?league=Fate%20of%20the%20Vaal";
@@ -74,7 +93,7 @@ pub async fn get_freshest_data(
     data_path: &Path,
 ) -> Result<Vec<ExchangeRecord>> {
     // TODO: error handling.
-    if check_if_snapshot_exists(most_recent_epoch, list_cached_snapshots) {
+    if check_if_snapshot_exists(most_recent_epoch, list_cached_snapshots)? {
         println!(
             "We have the most recent snapshot, number {}",
             &most_recent_epoch
@@ -122,7 +141,10 @@ pub fn list_all_snapshots(path: &Path) -> Result<Vec<fs::DirEntry>> {
     Ok(out_vec)
 }
 
-pub fn check_if_snapshot_exists(snapshot_to_check: u64, snapshot_list: &[fs::DirEntry]) -> bool {
+pub fn check_if_snapshot_exists(
+    snapshot_to_check: u64,
+    snapshot_list: &[fs::DirEntry],
+) -> Result<bool> {
     // TODO: Error handling
     for snapshot in snapshot_list {
         if snapshot_to_check
@@ -130,14 +152,14 @@ pub fn check_if_snapshot_exists(snapshot_to_check: u64, snapshot_list: &[fs::Dir
                 snapshot
                     .file_name()
                     .to_str()
-                    .expect("Couldn't get filename"),
+                    .context("Couldn't get filename")?,
             )
-            .expect("Couldn't get snapshot number")
+            .context("Couldn't get snapshot number")?
         {
-            return true;
+            return Ok(true);
         }
     }
-    false
+    Ok(false)
 }
 
 pub fn cache_to_disk(data: &impl Serialize, file_path: &Path) -> Result<()> {

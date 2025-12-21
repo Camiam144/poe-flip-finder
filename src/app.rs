@@ -9,7 +9,7 @@ use anyhow::{Error, Result};
 use reqwest::Client;
 
 use crate::{
-    api::{self, get_most_recent_cxapi},
+    api::{self, get_leagues, get_most_recent_cxapi},
     logic,
     models::{
         api_models::ExchangeRecord,
@@ -55,6 +55,7 @@ impl App {
         println!("Use help for valid commands");
         let client = Some(self.build_client().expect("Couldn't create client: "));
         self.client = client;
+        self.list_leagues().await.unwrap();
         self.refresh_data_if_needed().await.unwrap();
         self.recalculate();
         self.display_results();
@@ -87,10 +88,10 @@ impl App {
         Ok(())
     }
 
-    pub fn build_client(&self) -> Result<reqwest::Client, reqwest::Error> {
-        reqwest::Client::builder()
-            .user_agent("Oauth poeflipfinder/0.0.1 (contact: camiam144@gmail.com)")
-            .build()
+    pub fn build_client(&self) -> Result<reqwest::Client> {
+        Ok(reqwest::Client::builder()
+            .user_agent("poeflipfinder/0.0.1 (contact: camiam144@gmail.com)")
+            .build()?)
     }
 
     pub async fn handle_command(&mut self, cmd: &str) -> Result<(), Error> {
@@ -165,6 +166,24 @@ impl App {
             Some(other) => println!("Unknown command: {other}"),
             None => {}
         };
+        Ok(())
+    }
+
+    pub async fn list_leagues(&self) -> Result<()> {
+        let leagues = get_leagues(
+            self.client
+                .as_ref()
+                .expect("Should have client at this point"),
+            "poe2",
+        )
+        .await?;
+
+        println!("Available leagues: ");
+
+        for (i, league) in leagues.leagues.iter().enumerate() {
+            println!("{}. {}", i + 1, league.id);
+        }
+
         Ok(())
     }
 
@@ -246,7 +265,7 @@ impl App {
                 TradingCurrencyType::Divine => self.base_rates.div_to_exalt,
                 TradingCurrencyType::Chaos => self.base_rates.chaos_to_exalt,
                 TradingCurrencyType::Exalt => 1.0 / self.base_rates.div_to_exalt,
-                TradingCurrencyType::Other => 0.0,
+                TradingCurrencyType::Other(_) => 0.0,
             };
             let top_n_items =
                 logic::get_top_items(self.results.as_ref().unwrap(), &currency, self.top);

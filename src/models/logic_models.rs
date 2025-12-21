@@ -1,21 +1,23 @@
 use std::{convert::Infallible, fmt, str::FromStr};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub enum TradingCurrencyType {
+    Other(String),
     Exalt,
     Chaos,
     Divine,
-    Other,
 }
 
 impl FromStr for TradingCurrencyType {
     type Err = Infallible;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
-            "Exalted Orb" => TradingCurrencyType::Exalt,
-            "Chaos Orb" => TradingCurrencyType::Chaos,
-            "Divine Orb" => TradingCurrencyType::Divine,
-            _ => TradingCurrencyType::Other,
+            "Exalted Orb" | "exalt" => TradingCurrencyType::Exalt,
+            "Chaos Orb" | "chaos" => TradingCurrencyType::Chaos,
+            "Divine Orb" | "divine" => TradingCurrencyType::Divine,
+            _ => TradingCurrencyType::Other(String::from(s)),
         })
     }
 }
@@ -25,7 +27,7 @@ impl fmt::Display for TradingCurrencyType {
             TradingCurrencyType::Exalt => write!(f, "Exalt"),
             TradingCurrencyType::Chaos => write!(f, "Chaos"),
             TradingCurrencyType::Divine => write!(f, "Divine"),
-            TradingCurrencyType::Other => write!(f, "Other"),
+            TradingCurrencyType::Other(s) => write!(f, "Other: {}", s),
         }
     }
 }
@@ -59,6 +61,9 @@ mod tests {
     #[test]
     fn test_parse_other() {
         let orb = TradingCurrencyType::from_str("Vaal Orb");
-        assert_eq!(orb.unwrap(), TradingCurrencyType::Other)
+        assert_eq!(
+            orb.unwrap(),
+            TradingCurrencyType::Other("Vaal Orb".to_string())
+        )
     }
 }

@@ -49,8 +49,10 @@ impl ExchangeRecord {
 
     pub fn is_valid_bridge(&self) -> bool {
         let (curr1, curr2) = self.trading_currency();
-        (curr1 != TradingCurrencyType::Other && curr2 == TradingCurrencyType::Other)
-            || (curr1 == TradingCurrencyType::Other && curr2 != TradingCurrencyType::Other)
+        (!matches!(curr1, TradingCurrencyType::Other(_))
+            && matches!(curr2, TradingCurrencyType::Other(_)))
+            || (matches!(curr1, TradingCurrencyType::Other(_))
+                && !matches!(curr2, TradingCurrencyType::Other(_)))
     }
 
     pub fn hub_bridge_price(&self) -> Option<(TradingCurrencyType, f64, String, f64)> {
@@ -64,7 +66,7 @@ impl ExchangeRecord {
                 hub @ TradingCurrencyType::Exalt
                 | hub @ TradingCurrencyType::Chaos
                 | hub @ TradingCurrencyType::Divine,
-                TradingCurrencyType::Other,
+                TradingCurrencyType::Other(_),
             ) => Some((
                 hub,
                 self.currency_one_data.relative_price,
@@ -73,7 +75,7 @@ impl ExchangeRecord {
             )),
             // bridge -> hub
             (
-                TradingCurrencyType::Other,
+                TradingCurrencyType::Other(_),
                 hub @ TradingCurrencyType::Exalt
                 | hub @ TradingCurrencyType::Chaos
                 | hub @ TradingCurrencyType::Divine,
@@ -141,8 +143,8 @@ pub struct ExchangeSnapshot {
 // These are the models for the offical GGG api
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CurrencyPairValues {
-    pub c1: (String, u64),
-    pub c2: (String, u64),
+    pub c1: (TradingCurrencyType, u64),
+    pub c2: (TradingCurrencyType, u64),
 }
 
 #[derive(Debug, Deserialize)]
@@ -157,11 +159,20 @@ pub struct RawMarket {
     pub lowest_stock: HashMap<String, u64>,
 }
 
+/// This holds the bid/ask spread for a given market.
+#[derive(Debug)]
+pub struct BidAskSpread {
+    item_1: TradingCurrencyType,
+    item_2: TradingCurrencyType,
+    bid: CurrencyPairValues,
+    ask: CurrencyPairValues,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Market {
     pub league: String,
-    pub curr_a: String,
-    pub curr_b: String,
+    pub curr_a: TradingCurrencyType,
+    pub curr_b: TradingCurrencyType,
 
     pub volume_traded: CurrencyPairValues,
     pub highest_ratio: CurrencyPairValues,
@@ -177,8 +188,8 @@ impl Market {
             .context("Couldn't split market on vertical bar")?;
 
         Ok(Self {
-            curr_a: a.to_string(),
-            curr_b: b.to_string(),
+            curr_a: TradingCurrencyType::from_str(a)?,
+            curr_b: TradingCurrencyType::from_str(b)?,
 
             league: raw.league,
             volume_traded: Market::pair_from_map(&raw.volume_traded, a, b)?,
@@ -197,8 +208,8 @@ impl Market {
         let val_b = map.get(curr_b).context("Couldn't find currency b in map")?;
 
         Ok(CurrencyPairValues {
-            c1: (curr_a.to_string(), *val_a),
-            c2: (curr_b.to_string(), *val_b),
+            c1: (TradingCurrencyType::from_str(curr_a)?, *val_a),
+            c2: (TradingCurrencyType::from_str(curr_b)?, *val_b),
         })
     }
 }
@@ -206,6 +217,24 @@ impl Market {
 pub struct GGGMarket {
     pub next_change_id: u64,
     pub markets: Vec<Market>,
+}
+
+impl GGGMarket {
+    pub fn filter(&self, league: &str) -> Vec<&Market> {
+        self.markets
+            .iter()
+            .filter(|market| market.league == league)
+            .collect()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GGGLeagueList {
+    pub leagues: Vec<GGGLeague>,
+}
+#[derive(Debug, Deserialize)]
+pub struct GGGLeague {
+    pub id: String,
 }
 
 #[derive(Debug, Deserialize)]

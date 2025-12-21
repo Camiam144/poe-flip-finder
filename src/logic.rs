@@ -42,8 +42,8 @@ pub fn build_hub_bridge_maps(records: &[&ExchangeRecord]) -> HubBridgeMap {
     for record in records {
         if let Some((hub, hub_ex, bridge_str, bridge_ex)) = record.hub_bridge_price() {
             let hub_per_bridge_ratio = hub_ex / bridge_ex;
-            hub_to_bridge.insert((hub, bridge_str.clone()), hub_per_bridge_ratio);
-            bridge_to_hub.insert((bridge_str, hub), hub_per_bridge_ratio.recip());
+            hub_to_bridge.insert((hub.clone(), bridge_str.clone()), hub_per_bridge_ratio);
+            bridge_to_hub.insert((bridge_str, hub.clone()), hub_per_bridge_ratio.recip());
         }
     }
     (hub_to_bridge, bridge_to_hub)
@@ -61,17 +61,17 @@ pub fn build_bridges(
         TradingCurrencyType::Exalt,
     ];
 
-    for &first_hub in &hubs {
-        for &second_hub in &hubs {
+    for first_hub in hubs.iter() {
+        for second_hub in hubs.iter() {
             if first_hub == second_hub {
                 continue;
             }
             // Now we grind through everything
 
             for ((_hub_one, bridge), rate_one) in
-                hub_to_bridge.iter().filter(|((h, _), _)| *h == first_hub)
+                hub_to_bridge.iter().filter(|((h, _), _)| *h == *first_hub)
             {
-                if let Some(rate_two) = bridge_to_hub.get(&(bridge.clone(), second_hub)) {
+                if let Some(rate_two) = bridge_to_hub.get(&(bridge.clone(), second_hub.clone())) {
                     // If we have a rate two, this means we went A -> X -> B
                     // rate one is norm(A)/norm(X) and rate two is norm(X)/norm(B)
                     // so multiplying gives us norm(A)/norm(B)
@@ -79,7 +79,7 @@ pub fn build_bridges(
                     // will give us the relative price for A through the bridge
                     // I *think* this is right...
                     let cost = rate_one * rate_two;
-                    results.push((first_hub, bridge.clone(), second_hub, cost));
+                    results.push((first_hub.clone(), bridge.clone(), second_hub.clone(), cost));
                 }
             }
         }
