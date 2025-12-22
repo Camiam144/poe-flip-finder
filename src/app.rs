@@ -12,7 +12,7 @@ use crate::{
     api::{self, get_leagues, get_most_recent_cxapi},
     logic,
     models::{
-        api_models::ExchangeRecord,
+        api_models::{ExchangeRecord, Market},
         logic_models::{TradingCurrencyRates, TradingCurrencyType},
     },
 };
@@ -155,9 +155,9 @@ impl App {
                     self.display_results();
                 }
             }
-            Some("GGG") => {
+            Some("bid") => {
                 if let Err(e) = self.test_ggg().await {
-                    println!("GGG not ok {e}");
+                    println!("Can't get bid ask spreads {e}");
                 } else {
                     println!("GGG gud");
                 }
@@ -188,21 +188,36 @@ impl App {
     }
 
     pub async fn test_ggg(&self) -> Result<()> {
-        println!("Testing GGG");
+        // TODO: eventually need to pass league in here. Maybe I should instead
+        // pick a league and store it in the app context.
+        // This needs to check a cache just like the other side.
         let whole_market = get_most_recent_cxapi(self.client.as_ref().unwrap()).await?;
-        println!("Newest snapshot val {}", whole_market.next_change_id);
+        let league = "Fate of the Vaal";
+        // println!("Newest snapshot val {}", whole_market.next_change_id);
 
-        let first = whole_market
+        let mut league_markets: Vec<&Market> = whole_market
             .markets
             .iter()
-            .find(|m| m.league == "Fate of the Vaal");
+            .filter(|&m| m.league == league && m.get_spread().is_some())
+            .collect::<Vec<&Market>>();
 
-        println!("Found market {:?}", first);
+        league_markets.sort_unstable_by(|a, b| {
+            b.get_spread()
+                .unwrap()
+                .1
+                .cmp(&a.get_spread().unwrap().1)
+                .then(f64::total_cmp(
+                    &b.get_spread().unwrap().0,
+                    &a.get_spread().unwrap().0,
+                ))
+        });
+
+        println!("{:?}", &league_markets[0..3]);
 
         Ok(())
     }
 
-    pub async fn refresh_data_if_needed(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn refresh_data_if_needed(&mut self) -> Result<()> {
         let client = self.client.as_ref().unwrap();
 
         let most_recent_snapshot = api::get_exchange_snapshot(client).await?;

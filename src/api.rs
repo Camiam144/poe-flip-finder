@@ -9,13 +9,12 @@ use std::{fs, io};
 use crate::auth;
 use crate::auth::AuthorizedScopes;
 use crate::models::api_models::{
-    ExchangeRecord, ExchangeSnapshot, GGGLeague, GGGLeagueList, GGGMarket, Market, RawCxApiResponse,
+    ExchangeRecord, ExchangeSnapshot, GGGLeagueList, GGGMarket, Market, RawCxApiResponse,
 };
 
+/// Get the entire Cxapi dump from the past hour. The current hour does not yet
+/// have information.
 pub async fn get_most_recent_cxapi(client: &Client) -> Result<GGGMarket> {
-    // TODO: Should this auth stuff live in the "app" layer instead of getting
-    // called in each func?
-    let token = auth::get_api_token(&AuthorizedScopes::Cxapi).await?;
     let past_hour = (SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -23,39 +22,56 @@ pub async fn get_most_recent_cxapi(client: &Client) -> Result<GGGMarket> {
         / 3600)
         * 3600
         - 3600;
-    println!("Last hour timestamp: {}", past_hour);
-    let base_url = "https://api.pathofexile.com/currency-exchange/poe2/";
 
-    let url = format!("{}{}", base_url, past_hour);
+    let data_path = Path::new("data/markets/");
+    let filename = format!("markets_{}.json", past_hour);
+    let market_snapshots = list_all_snapshots(data_path)?;
 
-    let response = client
-        .get(url)
-        .header(AUTHORIZATION, format!("Bearer {}", token.access_token))
-        .send()
-        .await?;
+    if check_if_snapshot_exists(past_hour, &market_snapshots)? {
+        println!("Getting market {} from cache.", past_hour);
+        let json_file: fs::File = fs::File::open(data_path.join(filename))?;
+        let reader: io::BufReader<fs::File> = io::BufReader::new(json_file);
+        serde_json::from_reader(reader).context("Couldn't parse json from file.")
+    } else {
+        // This part runs if we don't have the data cached
+        let token = auth::get_api_token(&AuthorizedScopes::Cxapi).await?;
+        let base_url = "https://api.pathofexile.com/currency-exchange/poe2/";
+        let url = format!("{}{}", base_url, past_hour);
 
-    let raw_data: RawCxApiResponse = response.json().await?;
+        let response = client
+            .get(url)
+            .header(AUTHORIZATION, format!("Bearer {}", token.access_token))
+            .send()
+            .await?;
 
-    // println!("GGG Response {:#?}", this_json);
+        let raw_data: RawCxApiResponse = response.json().await?;
 
-    let parsed_markets: Result<Vec<Market>, anyhow::Error> = raw_data
-        .markets
-        .into_iter()
-        .map(|m| Market::from_raw(m).context("Couldn't parse"))
-        .collect();
+        // println!("GGG Response {:#?}", this_json);
 
-    Ok(GGGMarket {
-        next_change_id: raw_data.next_change_id,
-        markets: parsed_markets?,
-    })
+        let parsed_markets: Result<Vec<Market>, anyhow::Error> = raw_data
+            .markets
+            .into_iter()
+            .map(|m| Market::from_raw(m).context("Couldn't parse a market response."))
+            .collect();
+        let all_markets = GGGMarket {
+            next_change_id: raw_data.next_change_id,
+            markets: parsed_markets?,
+        };
+        let file_path = data_path.join(filename);
+        cache_to_disk(&all_markets, &file_path).context("Couldn't cache snapshot to disk:")?;
+
+        Ok(all_markets)
+    }
 }
 
+/// Get all current leagues from GGG's API. This can probably be cached and
+/// updated as needed instead of pinging it every time, but for now we will
+/// continue to ping ever time
 pub async fn get_leagues(client: &Client, realm: &str) -> Result<GGGLeagueList> {
     let token = auth::get_api_token(&AuthorizedScopes::Leagues).await?;
     let url = "https://api.pathofexile.com/league";
     let params = [("realm", realm)];
     let url = reqwest::Url::parse_with_params(url, &params)?;
-    println!("Hitting url: {}", url);
 
     let response = client
         .get(url)

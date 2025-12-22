@@ -141,7 +141,7 @@ pub struct ExchangeSnapshot {
 }
 
 // These are the models for the offical GGG api
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CurrencyPairValues {
     pub c1: (TradingCurrencyType, u64),
     pub c2: (TradingCurrencyType, u64),
@@ -211,6 +211,33 @@ impl Market {
             c1: (TradingCurrencyType::from_str(curr_a)?, *val_a),
             c2: (TradingCurrencyType::from_str(curr_b)?, *val_b),
         })
+    }
+
+    /// Get the bid ask spread.
+    /// Currencies are ranked from weakest to strongest: Anything, Ex, Chaos, Div.
+    /// The Bid Ask Spread is presented as weaker per stronger (e.g. items per div)
+    pub fn get_spread(&self) -> Option<(f64, TradingCurrencyType)> {
+        let norm_bid = if self.curr_a <= self.curr_b {
+            self.lowest_ratio.c2.1 as f64 / self.lowest_ratio.c1.1 as f64
+        } else {
+            self.lowest_ratio.c1.1 as f64 / self.lowest_ratio.c2.1 as f64
+        };
+
+        let norm_ask = if self.curr_a <= self.curr_b {
+            self.highest_ratio.c2.1 as f64 / self.highest_ratio.c1.1 as f64
+        } else {
+            self.highest_ratio.c1.1 as f64 / self.highest_ratio.c2.1 as f64
+        };
+
+        if norm_ask.is_infinite()
+            || norm_ask.is_nan()
+            || norm_bid.is_infinite()
+            || norm_bid.is_nan()
+        {
+            return None;
+        }
+
+        Some((norm_ask - norm_bid, self.curr_a.clone()))
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
