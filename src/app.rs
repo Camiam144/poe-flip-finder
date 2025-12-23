@@ -10,7 +10,7 @@ use reqwest::Client;
 
 use crate::{
     api::{self, get_leagues, get_most_recent_cxapi},
-    logic,
+    logic::{self, get_ggg_base_prices},
     models::{
         api_models::{ExchangeRecord, Market},
         logic_models::{TradingCurrencyRates, TradingCurrencyType},
@@ -212,7 +212,12 @@ impl App {
                 ))
         });
 
-        println!("{:?}", &league_markets[0..3]);
+        // println!("{:?}", &league_markets[0..3]);
+
+        let ggg_rates = get_ggg_base_prices(&league_markets);
+        println!("Divine to Exalt ratio {:?}", ggg_rates.div_to_exalt);
+        println!("Divine to Chaos ratio {:?}", ggg_rates.div_to_chaos);
+        println!("Chaos to Exalt ratio {:?}", ggg_rates.chaos_to_exalt);
 
         Ok(())
     }

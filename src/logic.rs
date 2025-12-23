@@ -1,4 +1,4 @@
-use crate::models::api_models::ExchangeRecord;
+use crate::models::api_models::{ExchangeRecord, Market};
 use crate::models::logic_models::{TradingCurrencyRates, TradingCurrencyType};
 use std::collections::HashMap;
 
@@ -17,6 +17,42 @@ pub fn get_base_prices(records: &[ExchangeRecord]) -> TradingCurrencyRates {
         }
     }
     rates.div_to_chaos = rates.div_to_exalt / rates.chaos_to_exalt;
+    rates
+}
+
+/// Get the average price of each actual trading currency
+pub fn get_ggg_base_prices(markets: &[&Market]) -> TradingCurrencyRates {
+    let mut rates = TradingCurrencyRates::default();
+
+    for market in markets {
+        match (&market.curr_a, &market.curr_b) {
+            (TradingCurrencyType::Divine, TradingCurrencyType::Exalt)
+            | (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => {
+                if market.highest_ratio.c1.0 == TradingCurrencyType::Exalt {
+                    rates.div_to_exalt = market.lowest_ratio.c1.1 as f64;
+                } else {
+                    rates.div_to_exalt = market.lowest_ratio.c2.1 as f64;
+                }
+            }
+            (TradingCurrencyType::Divine, TradingCurrencyType::Chaos)
+            | (TradingCurrencyType::Chaos, TradingCurrencyType::Divine) => {
+                if market.highest_ratio.c1.0 == TradingCurrencyType::Chaos {
+                    rates.div_to_chaos = market.lowest_ratio.c1.1 as f64;
+                } else {
+                    rates.div_to_chaos = market.lowest_ratio.c2.1 as f64;
+                }
+            }
+            (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt)
+            | (TradingCurrencyType::Exalt, TradingCurrencyType::Chaos) => {
+                if market.highest_ratio.c1.0 == TradingCurrencyType::Exalt {
+                    rates.chaos_to_exalt = market.lowest_ratio.c1.1 as f64;
+                } else {
+                    rates.chaos_to_exalt = market.lowest_ratio.c2.1 as f64;
+                }
+            }
+            (_, _) => {}
+        }
+    }
     rates
 }
 // What do we have to do once we have the values?

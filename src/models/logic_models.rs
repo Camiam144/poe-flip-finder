@@ -14,7 +14,7 @@ impl FromStr for TradingCurrencyType {
     type Err = Infallible;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
-            "Exalted Orb" | "exalt" => TradingCurrencyType::Exalt,
+            "Exalted Orb" | "exalted" | "exalt" => TradingCurrencyType::Exalt,
             "Chaos Orb" | "chaos" => TradingCurrencyType::Chaos,
             "Divine Orb" | "divine" => TradingCurrencyType::Divine,
             _ => TradingCurrencyType::Other(String::from(s)),
@@ -46,17 +46,23 @@ mod tests {
     #[test]
     fn test_parse_exalt() {
         let orb = TradingCurrencyType::from_str("Exalted Orb");
-        assert_eq!(orb.unwrap(), TradingCurrencyType::Exalt)
+        let orb2 = TradingCurrencyType::from_str("exalted");
+        assert_eq!(orb.unwrap(), TradingCurrencyType::Exalt);
+        assert_eq!(orb2.unwrap(), TradingCurrencyType::Exalt);
     }
     #[test]
     fn test_parse_divine() {
         let orb = TradingCurrencyType::from_str("Divine Orb");
-        assert_eq!(orb.unwrap(), TradingCurrencyType::Divine)
+        let orb2 = TradingCurrencyType::from_str("divine");
+        assert_eq!(orb.unwrap(), TradingCurrencyType::Divine);
+        assert_eq!(orb2.unwrap(), TradingCurrencyType::Divine);
     }
     #[test]
     fn test_parse_chaos() {
         let orb = TradingCurrencyType::from_str("Chaos Orb");
-        assert_eq!(orb.unwrap(), TradingCurrencyType::Chaos)
+        let orb2 = TradingCurrencyType::from_str("chaos");
+        assert_eq!(orb.unwrap(), TradingCurrencyType::Chaos);
+        assert_eq!(orb2.unwrap(), TradingCurrencyType::Chaos);
     }
     #[test]
     fn test_parse_other() {
