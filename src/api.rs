@@ -79,8 +79,6 @@ pub async fn get_leagues(client: &Client, realm: &str) -> Result<GGGLeagueList> 
         .send()
         .await?;
 
-    println!("{:?}", response);
-
     let result: GGGLeagueList = response.json().await?;
 
     Ok(result)

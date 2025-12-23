@@ -160,13 +160,13 @@ pub struct RawMarket {
 }
 
 /// This holds the bid/ask spread for a given market.
-#[derive(Debug)]
-pub struct BidAskSpread {
-    item_1: TradingCurrencyType,
-    item_2: TradingCurrencyType,
-    bid: CurrencyPairValues,
-    ask: CurrencyPairValues,
-}
+// #[derive(Debug)]
+// pub struct BidAskSpread {
+//     item_1: TradingCurrencyType,
+//     item_2: TradingCurrencyType,
+//     bid: CurrencyPairValues,
+//     ask: CurrencyPairValues,
+// }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Market {

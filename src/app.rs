@@ -219,6 +219,33 @@ impl App {
         println!("Divine to Chaos ratio {:?}", ggg_rates.div_to_chaos);
         println!("Chaos to Exalt ratio {:?}", ggg_rates.chaos_to_exalt);
 
+        let (divine_market, other_markets): (Vec<&Market>, Vec<&Market>) = league_markets
+            .iter()
+            .partition(|m| m.curr_a == TradingCurrencyType::Divine);
+
+        let (chaos_markets, exalt_markets): (Vec<&Market>, Vec<&Market>) = other_markets
+            .iter()
+            .partition(|m| m.curr_a == TradingCurrencyType::Chaos);
+
+        let mut all_markets: Vec<Vec<&Market>> = vec![divine_market];
+        all_markets.push(chaos_markets);
+        all_markets.push(exalt_markets);
+
+        for curr_market in all_markets {
+            for market in curr_market[..10].iter() {
+                if let Some(spread) = market.get_spread() {
+                    println!(
+                        "Flipping {} for {} {} profit. Ask {} Bid {}.",
+                        market.curr_b,
+                        spread.0,
+                        spread.1,
+                        market.highest_ratio.c1.1,
+                        market.lowest_ratio.c1.1
+                    );
+                }
+            }
+        }
+
         Ok(())
     }
 
