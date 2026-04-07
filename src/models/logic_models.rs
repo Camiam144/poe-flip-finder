@@ -72,4 +72,12 @@ mod tests {
             TradingCurrencyType::Other("Vaal Orb".to_string())
         )
     }
+    #[test]
+    fn test_comparison() {
+        assert!(TradingCurrencyType::Divine > TradingCurrencyType::Chaos);
+        assert!(TradingCurrencyType::Chaos > TradingCurrencyType::Exalt);
+        assert!(
+            TradingCurrencyType::Exalt > TradingCurrencyType::Other("anything-here".to_string())
+        )
+    }
 }

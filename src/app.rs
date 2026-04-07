@@ -232,17 +232,38 @@ impl App {
         all_markets.push(exalt_markets);
 
         for curr_market in all_markets {
+            println!("{}", curr_market[0].curr_a);
             for market in curr_market[..10].iter() {
                 if let Some(spread) = market.get_spread() {
+                    let ask = match market.get_normed_ask() {
+                        Some(val) => val,
+                        None => continue,
+                    };
+                    let bid = match market.get_normed_bid() {
+                        Some(val) => val,
+                        None => continue,
+                    };
                     println!(
                         "Flipping {} for {} {} profit. Ask {} Bid {}.",
-                        market.curr_b,
-                        spread.0,
-                        spread.1,
-                        market.highest_ratio.c1.1,
-                        market.lowest_ratio.c1.1
+                        market.curr_b, spread.0, spread.1, ask, bid
                     );
                 }
+            }
+        }
+
+        for market in league_markets.iter() {
+            if market.curr_a == TradingCurrencyType::Other("primary-calamity-fragment".to_string())
+                || market.curr_b
+                    == TradingCurrencyType::Other("primary-calamity-fragment".to_string())
+            {
+                println!(
+                    "curr_a {} curr_b {} bid {} ask {} spread {:?}",
+                    market.curr_a,
+                    market.curr_b,
+                    market.get_normed_bid().unwrap_or(0_f64),
+                    market.get_normed_ask().unwrap_or(0_f64),
+                    market.get_spread().unwrap()
+                );
             }
         }
 

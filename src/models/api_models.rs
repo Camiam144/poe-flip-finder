@@ -213,29 +213,41 @@ impl Market {
         })
     }
 
+    /// Get normalized bids and asks so we can get the correct ratios.
+    pub fn get_normed_bid(&self) -> Option<f64> {
+        let (stronger, weaker) = if self.curr_a < self.curr_b {
+            (&self.lowest_ratio.c2, &self.lowest_ratio.c1)
+        } else {
+            (&self.lowest_ratio.c1, &self.lowest_ratio.c2)
+        };
+        let normed = stronger.1 as f64 / weaker.1 as f64;
+
+        if normed.is_infinite() || normed.is_nan() {
+            return None;
+        }
+        Some(normed)
+    }
+
+    pub fn get_normed_ask(&self) -> Option<f64> {
+        let (stronger, weaker) = if self.curr_a < self.curr_b {
+            (&self.highest_ratio.c2, &self.highest_ratio.c1)
+        } else {
+            (&self.highest_ratio.c1, &self.highest_ratio.c2)
+        };
+        let normed = stronger.1 as f64 / weaker.1 as f64;
+
+        if normed.is_infinite() || normed.is_nan() {
+            return None;
+        }
+        Some(normed)
+    }
+
     /// Get the bid ask spread.
     /// Currencies are ranked from weakest to strongest: Anything, Ex, Chaos, Div.
     /// The Bid Ask Spread is presented as weaker per stronger (e.g. items per div)
     pub fn get_spread(&self) -> Option<(f64, TradingCurrencyType)> {
-        let norm_bid = if self.curr_a <= self.curr_b {
-            self.lowest_ratio.c2.1 as f64 / self.lowest_ratio.c1.1 as f64
-        } else {
-            self.lowest_ratio.c1.1 as f64 / self.lowest_ratio.c2.1 as f64
-        };
-
-        let norm_ask = if self.curr_a <= self.curr_b {
-            self.highest_ratio.c2.1 as f64 / self.highest_ratio.c1.1 as f64
-        } else {
-            self.highest_ratio.c1.1 as f64 / self.highest_ratio.c2.1 as f64
-        };
-
-        if norm_ask.is_infinite()
-            || norm_ask.is_nan()
-            || norm_bid.is_infinite()
-            || norm_bid.is_nan()
-        {
-            return None;
-        }
+        let norm_bid = self.get_normed_bid()?;
+        let norm_ask = self.get_normed_ask()?;
 
         Some((norm_ask - norm_bid, self.curr_a.clone()))
     }
@@ -247,7 +259,7 @@ pub struct GGGMarket {
 }
 
 impl GGGMarket {
-    pub fn filter(&self, league: &str) -> Vec<&Market> {
+    pub fn filter_league(&self, league: &str) -> Vec<&Market> {
         self.markets
             .iter()
             .filter(|market| market.league == league)
