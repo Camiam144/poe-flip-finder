@@ -1,6 +1,7 @@
 mod api;
 mod app;
 mod auth;
+mod db;
 mod logic;
 mod models;
 

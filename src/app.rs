@@ -10,6 +10,7 @@ use reqwest::Client;
 
 use crate::{
     api::{self, get_leagues, get_most_recent_cxapi},
+    db::{self},
     logic::{self, get_ggg_base_prices},
     models::{
         api_models::{ExchangeRecord, Market},
