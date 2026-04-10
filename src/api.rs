@@ -1,3 +1,5 @@
+//! This module contains stuff for working with GGG's API
+//! This is not internal API endpoints.
 use anyhow::{Context, Ok, Result};
 use reqwest::Client;
 use reqwest::header::AUTHORIZATION;
@@ -14,7 +16,7 @@ use crate::models::api_models::{
 
 /// Get the entire Cxapi dump from the past hour. The current hour does not yet
 /// have information.
-pub async fn get_most_recent_cxapi(client: &Client) -> Result<GGGMarket> {
+pub async fn get_most_recent_cxapi(client: &Client) -> Result<GGGMarket, anyhow::Error> {
     let past_hour = (SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
