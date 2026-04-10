@@ -12,21 +12,21 @@ const DB_URL: &str = "sqlite://poe-flip-finder-database.db";
 static MIGRATOR: migrate::Migrator = migrate!("./migrations");
 
 #[derive(sqlx::FromRow, Debug, PartialEq, Eq)]
-struct DbRow {
-    id: i64,
-    change_id: i64,
-    game_version: String,
-    payload: String,
+pub struct DbRow {
+    pub id: i64,
+    pub change_id: i64,
+    pub game_version: String,
+    pub payload: String,
 }
 
-struct DbClient {
+pub struct DbClient {
     pool: SqlitePool,
 }
 
 impl DbClient {
     /// Initialize the database connection
     /// if the database does not exist, create it and run the migration
-    async fn try_from_path(db_path: PathBuf) -> Result<Self, sqlx::Error> {
+    pub async fn try_from_path(db_path: PathBuf) -> Result<Self, sqlx::Error> {
         let options = SqliteConnectOptions::new()
             .filename(db_path)
             .create_if_missing(true);
@@ -38,7 +38,7 @@ impl DbClient {
 
     /// Insert data into the database
     /// Does not check for duplicate data, that must be done elsewhere
-    async fn insert_data(
+    pub async fn insert_data(
         &self,
         change_id: i64,
         game_version: &str,
@@ -60,7 +60,7 @@ impl DbClient {
     }
 
     /// Get a specific change_id and game version
-    async fn get_specific_change_id(
+    pub async fn get_specific_change_id(
         &self,
         change_id: i64,
         game_version: &str,
@@ -82,7 +82,7 @@ impl DbClient {
     }
 
     /// Retrieve the single most recent entry for the given game version
-    async fn get_latest(&self, game_version: &str) -> Result<Option<DbRow>, sqlx::Error> {
+    pub async fn get_latest(&self, game_version: &str) -> Result<Option<DbRow>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
         let results: Option<DbRow> = query_as(
@@ -99,7 +99,7 @@ impl DbClient {
     }
 
     // Delete entries older than a cutoff to prevent the DB from growing too large
-    async fn delete_old_entries(&self, cutoff_timestamp: i64) -> Result<(), sqlx::Error> {
+    pub async fn delete_old_entries(&self, cutoff_timestamp: i64) -> Result<(), sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
         let _ = query(

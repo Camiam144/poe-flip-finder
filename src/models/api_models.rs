@@ -117,19 +117,6 @@ pub struct CurrencyData {
     pub volume_traded: u64,
 }
 
-// #[allow(dead_code)]
-// #[derive(Debug)]
-// pub struct ExchangeQueryResult {
-//     pub ts: u64,
-//     pub pair_id: u64,
-//     pub snapshot_id: u64,
-//     pub from_currency: String,
-//     pub to_currency: String,
-//     pub from_relative_price: f64,
-//     pub to_relative_price: f64,
-//     pub volume: f64,
-// }
-
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct ExchangeSnapshot {
@@ -159,15 +146,6 @@ pub struct RawMarket {
     pub lowest_stock: HashMap<String, u64>,
 }
 
-/// This holds the bid/ask spread for a given market.
-// #[derive(Debug)]
-// pub struct BidAskSpread {
-//     item_1: TradingCurrencyType,
-//     item_2: TradingCurrencyType,
-//     bid: CurrencyPairValues,
-//     ask: CurrencyPairValues,
-// }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Market {
     pub league: String,
@@ -181,7 +159,7 @@ pub struct Market {
     pub lowest_stock: CurrencyPairValues,
 }
 impl Market {
-    pub fn from_raw(raw: RawMarket) -> Result<Self> {
+    pub fn try_from_raw(raw: RawMarket) -> Result<Self> {
         let (a, b) = raw
             .market_id
             .split_once('|')
@@ -259,6 +237,17 @@ pub struct GGGMarket {
 }
 
 impl GGGMarket {
+    pub fn try_from_raw_cxapi_response(response: RawCxApiResponse) -> Result<Self> {
+        let parsed_markets: Vec<Market> = response
+            .markets
+            .into_iter()
+            .map(|m| Market::try_from_raw(m).expect("Should have been able to parse raw market"))
+            .collect();
+        Ok(GGGMarket {
+            next_change_id: response.next_change_id,
+            markets: parsed_markets,
+        })
+    }
     pub fn filter_league(&self, league: &str) -> Vec<&Market> {
         self.markets
             .iter()
@@ -267,10 +256,6 @@ impl GGGMarket {
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct GGGLeagueList {
-    pub leagues: Vec<GGGLeague>,
-}
 #[derive(Debug, Deserialize)]
 pub struct GGGLeague {
     pub id: String,
