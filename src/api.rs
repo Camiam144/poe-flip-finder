@@ -16,11 +16,9 @@ pub async fn get_specified_cxapi(
     client: &Client,
     db_client: &DbClient,
     realm: &str,
-    time: u64,
+    time: i64,
 ) -> Result<GGGMarket> {
-    let market = db_client
-        .get_specific_change_id(time.try_into().unwrap(), realm)
-        .await?;
+    let market = db_client.get_specific_change_id(time, realm).await?;
     let response = if market.is_some() {
         serde_json::from_str::<RawCxApiResponse>(&market.unwrap().payload)
             .context("Should have been able to parse cached payload")?
@@ -37,7 +35,15 @@ pub async fn get_specified_cxapi(
             .send()
             .await?;
 
-        raw_response.json().await?
+        // In order to get both the raw text and the json we have to read the entire
+        // stream to a string, save the string, and then use serde to deserialize
+        // the string to the rust object we want.
+        let text_response = raw_response.text().await?;
+
+        // save the stuff to the db
+        db_client.insert_data(time, realm, &text_response);
+
+        serde_json::from_str::<RawCxApiResponse>(&text_response)?
     };
 
     GGGMarket::try_from_raw_cxapi_response(response)
@@ -58,7 +64,7 @@ pub async fn get_most_recent_cxapi(
         * 3600
         - 3600;
 
-    get_specified_cxapi(client, db_client, realm, past_hour).await
+    get_specified_cxapi(client, db_client, realm, past_hour.try_into().unwrap()).await
 }
 
 /// Get all current leagues from GGG's API. This can probably be cached and
