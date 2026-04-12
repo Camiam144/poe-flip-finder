@@ -12,7 +12,10 @@ mod handlers;
 mod models;
 
 use crate::db::DbClient;
-use crate::handlers::{handler_404, health_checker_handler, hello_world_handler, leagues_handler};
+use crate::handlers::{
+    handler_404, health_checker_handler, hello_world_handler, leagues_handler,
+    most_recent_cxapi_handler,
+};
 
 // use app::App;
 
@@ -50,6 +53,7 @@ async fn main() {
         .route("/", get(hello_world_handler))
         .route("/api/healthchecker", get(health_checker_handler))
         .route("/api/{realm}", get(leagues_handler))
+        .route("/api/most_recent", get(most_recent_cxapi_handler))
         .with_state(app_state);
     let app = app.fallback(handler_404);
 
