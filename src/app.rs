@@ -10,7 +10,6 @@ use reqwest::Client;
 
 use crate::{
     api::{self, get_leagues, get_most_recent_cxapi},
-    db::{self},
     logic::{self, get_ggg_base_prices},
     models::{
         api_models::{ExchangeRecord, Market},
@@ -90,6 +89,7 @@ impl App {
     }
 
     pub fn build_client(&self) -> Result<reqwest::Client> {
+        // TODO: This is where the bearer auth token should go
         Ok(reqwest::Client::builder()
             .user_agent("poeflipfinder/0.0.1 (contact: camiam144@gmail.com)")
             .build()?)
@@ -181,7 +181,7 @@ impl App {
 
         println!("Available leagues: ");
 
-        for (i, league) in leagues.leagues.iter().enumerate() {
+        for (i, league) in leagues.iter().enumerate() {
             println!("{}. {}", i + 1, league.id);
         }
 
@@ -274,7 +274,7 @@ impl App {
     pub async fn refresh_data_if_needed(&mut self) -> Result<()> {
         let client = self.client.as_ref().unwrap();
 
-        let most_recent_snapshot = api::get_exchange_snapshot(client).await?;
+        let most_recent_snapshot = api::get_most_recent_cxapi(client).await?;
         let newest_snapshot = most_recent_snapshot.epoch;
 
         if self.current_snapshot != Some(newest_snapshot) {

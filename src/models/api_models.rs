@@ -117,6 +117,19 @@ pub struct CurrencyData {
     pub volume_traded: u64,
 }
 
+// #[allow(dead_code)]
+// #[derive(Debug)]
+// pub struct ExchangeQueryResult {
+//     pub ts: u64,
+//     pub pair_id: u64,
+//     pub snapshot_id: u64,
+//     pub from_currency: String,
+//     pub to_currency: String,
+//     pub from_relative_price: f64,
+//     pub to_relative_price: f64,
+//     pub volume: f64,
+// }
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct ExchangeSnapshot {
@@ -130,8 +143,8 @@ pub struct ExchangeSnapshot {
 // These are the models for the offical GGG api
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CurrencyPairValues {
-    pub c1: (TradingCurrencyType, u64),
-    pub c2: (TradingCurrencyType, u64),
+    pub ca: (TradingCurrencyType, u64),
+    pub cb: (TradingCurrencyType, u64),
 }
 
 #[derive(Debug, Deserialize)]
@@ -145,6 +158,15 @@ pub struct RawMarket {
     pub lowest_ratio: HashMap<String, u64>,
     pub lowest_stock: HashMap<String, u64>,
 }
+
+/// This holds the bid/ask spread for a given market.
+// #[derive(Debug)]
+// pub struct BidAskSpread {
+//     item_1: TradingCurrencyType,
+//     item_2: TradingCurrencyType,
+//     bid: CurrencyPairValues,
+//     ask: CurrencyPairValues,
+// }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Market {
@@ -186,17 +208,17 @@ impl Market {
         let val_b = map.get(curr_b).context("Couldn't find currency b in map")?;
 
         Ok(CurrencyPairValues {
-            c1: (TradingCurrencyType::from_str(curr_a)?, *val_a),
-            c2: (TradingCurrencyType::from_str(curr_b)?, *val_b),
+            ca: (TradingCurrencyType::from_str(curr_a)?, *val_a),
+            cb: (TradingCurrencyType::from_str(curr_b)?, *val_b),
         })
     }
 
     /// Get normalized bids and asks so we can get the correct ratios.
     pub fn get_normed_bid(&self) -> Option<f64> {
         let (stronger, weaker) = if self.curr_a < self.curr_b {
-            (&self.lowest_ratio.c2, &self.lowest_ratio.c1)
+            (&self.lowest_ratio.cb, &self.lowest_ratio.ca)
         } else {
-            (&self.lowest_ratio.c1, &self.lowest_ratio.c2)
+            (&self.lowest_ratio.ca, &self.lowest_ratio.cb)
         };
         let normed = stronger.1 as f64 / weaker.1 as f64;
 
@@ -208,9 +230,9 @@ impl Market {
 
     pub fn get_normed_ask(&self) -> Option<f64> {
         let (stronger, weaker) = if self.curr_a < self.curr_b {
-            (&self.highest_ratio.c2, &self.highest_ratio.c1)
+            (&self.highest_ratio.cb, &self.highest_ratio.ca)
         } else {
-            (&self.highest_ratio.c1, &self.highest_ratio.c2)
+            (&self.highest_ratio.ca, &self.highest_ratio.cb)
         };
         let normed = stronger.1 as f64 / weaker.1 as f64;
 
@@ -256,7 +278,11 @@ impl GGGMarket {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GGGLeagueList {
+    pub leagues: Vec<GGGLeague>,
+}
+#[derive(Debug, Deserialize, Serialize)]
 pub struct GGGLeague {
     pub id: String,
 }

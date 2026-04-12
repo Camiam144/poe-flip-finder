@@ -11,7 +11,7 @@ use crate::db::DbClient;
 use crate::models::api_models::{GGGLeague, GGGMarket, RawCxApiResponse};
 
 /// Get the specified cxapi realm and timestamp from the cache if it exists,
-/// otherwise grab it from the API
+/// otherwise grab it from the API and cache it.
 pub async fn get_specified_cxapi(
     client: &Client,
     db_client: &DbClient,
@@ -19,12 +19,13 @@ pub async fn get_specified_cxapi(
     time: i64,
 ) -> Result<GGGMarket> {
     let market = db_client.get_specific_change_id(time, realm).await?;
-    let response = if market.is_some() {
-        serde_json::from_str::<RawCxApiResponse>(&market.unwrap().payload)
+    let response = if let Some(val) = market {
+        serde_json::from_str::<RawCxApiResponse>(&val.payload)
             .context("Should have been able to parse cached payload")?
     } else {
         // We don't have the specific payload already cached, so we have to get it
-
+        // I shouldn't keep calling this whenever I need a token. Once I have a valid
+        // token I think I should cache it in the app state or the client somewhere.
         let token = auth::get_api_token(&AuthorizedScopes::Cxapi).await?;
         let base_url = "https://api.pathofexile.com/currency-exchange/";
         let url = format!("{}{}/{}", base_url, realm.to_lowercase(), time);
@@ -36,12 +37,12 @@ pub async fn get_specified_cxapi(
             .await?;
 
         // In order to get both the raw text and the json we have to read the entire
-        // stream to a string, save the string, and then use serde to deserialize
-        // the string to the rust object we want.
+        // stream to a string (consuming the stream), save the string, and then
+        // use serde to deserialize the string to the rust object we want.
         let text_response = raw_response.text().await?;
 
         // save the stuff to the db
-        db_client.insert_data(time, realm, &text_response);
+        db_client.insert_data(time, realm, &text_response).await?;
 
         serde_json::from_str::<RawCxApiResponse>(&text_response)?
     };
@@ -67,10 +68,10 @@ pub async fn get_most_recent_cxapi(
     get_specified_cxapi(client, db_client, realm, past_hour.try_into().unwrap()).await
 }
 
-/// Get all current leagues from GGG's API. This can probably be cached and
-/// updated as needed instead of pinging it every time, but for now we will
-/// continue to ping ever time
+/// Get all current leagues from GGG's API. This should be cached and
+/// updated as needed instead of pinging it every time
 pub async fn get_leagues(client: &Client, realm: &str) -> Result<Vec<GGGLeague>> {
+    // TODO: Cache these in the database, check once per day?
     let token = auth::get_api_token(&AuthorizedScopes::Leagues).await?;
     let url = "https://api.pathofexile.com/league";
     let params = [("realm", realm)];

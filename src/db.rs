@@ -8,7 +8,6 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use sqlx::{query, query_as};
 use std::path::PathBuf;
 
-const DB_URL: &str = "sqlite://poe-flip-finder-database.db";
 static MIGRATOR: migrate::Migrator = migrate!("./migrations");
 
 #[derive(sqlx::FromRow, Debug, PartialEq, Eq)]
@@ -19,6 +18,7 @@ pub struct DbRow {
     pub payload: String,
 }
 
+#[derive(Debug)]
 pub struct DbClient {
     pool: SqlitePool,
 }
@@ -41,7 +41,7 @@ impl DbClient {
     pub async fn insert_data(
         &self,
         change_id: i64,
-        game_version: &str,
+        realm: &str,
         payload: &str,
     ) -> Result<(), sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
@@ -51,7 +51,7 @@ impl DbClient {
     ",
         )
         .bind(change_id)
-        .bind(game_version)
+        .bind(realm)
         .bind(payload)
         .execute(&mut *conn)
         .await?;
@@ -63,7 +63,7 @@ impl DbClient {
     pub async fn get_specific_change_id(
         &self,
         change_id: i64,
-        game_version: &str,
+        realm: &str,
     ) -> Result<Option<DbRow>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
@@ -74,7 +74,7 @@ impl DbClient {
         AND game_version = $2;",
         )
         .bind(change_id)
-        .bind(game_version)
+        .bind(realm)
         .fetch_optional(&mut *conn)
         .await?;
 
@@ -82,7 +82,7 @@ impl DbClient {
     }
 
     /// Retrieve the single most recent entry for the given game version
-    pub async fn get_latest(&self, game_version: &str) -> Result<Option<DbRow>, sqlx::Error> {
+    pub async fn get_latest(&self, realm: &str) -> Result<Option<DbRow>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
         let results: Option<DbRow> = query_as(
@@ -91,7 +91,7 @@ impl DbClient {
         ORDER BY change_id DESC
         LIMIT 1;",
         )
-        .bind(game_version)
+        .bind(realm)
         .fetch_optional(&mut *conn)
         .await?;
 
