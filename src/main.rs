@@ -64,7 +64,9 @@ async fn main() {
         .expect("Should have been able to bind to port 8000");
     axum::serve(listener, app)
         .await
-        .expect("Should have been able to start server")
+        .expect("Should have been able to start server");
+
+    println!("Listening on localhost:8000");
 }
 
 async fn build_http_client() -> Result<reqwest::Client> {

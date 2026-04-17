@@ -8,13 +8,13 @@ use std::{
 use axum::{
     Json,
     extract::{Path, Query, State},
-    response::IntoResponse,
+    response::{IntoResponse, Response},
 };
 use reqwest::{Client, StatusCode};
 
 use crate::AppState;
 use crate::db::DbClient;
-use crate::models::api_models::{GGGLeague, GGGLeagueList, GGGMarket, RawCxApiResponse};
+use crate::models::api_models::{GGGLeagueList, GGGMarket, RawCxApiResponse};
 
 pub async fn handler_404() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, "Not found go 404 yourself")
@@ -28,7 +28,7 @@ pub async fn health_checker_handler() -> impl IntoResponse {
         "message" : MESSAGE
     });
 
-    Json(json_response)
+    (StatusCode::OK, Json(json_response))
 }
 
 pub async fn hello_world_handler() -> impl IntoResponse {
@@ -40,25 +40,46 @@ pub async fn hello_world_handler() -> impl IntoResponse {
 pub async fn leagues_handler(
     State(data): State<Arc<AppState>>,
     Path(realm): Path<String>,
-) -> impl IntoResponse {
+) -> Response {
     // TODO: Cache these in the database, check once per day?
+    // Should the logic go in a helper function(s) and handler *only* calls functions?
+    // This technically builds the url *AND* gets the data *AND* deserializes the data *AND*
+    // returns it to the caller.
     let token = &data.leagues_token;
     let url = "https://api.pathofexile.com/league";
     let params = [("realm", realm)];
     let url = reqwest::Url::parse_with_params(url, &params).expect("Couldn't build leagues url");
 
-    let response = data
+    let response = match data
         .http_client
         .get(url)
         .bearer_auth(token)
         // .header(AUTHORIZATION, format!("Bearer {}", token))
         .send()
         .await
-        .expect("Couldn't get data from GGG");
+    {
+        Ok(value) => value,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Couldn't get League List from GGG API.",
+            )
+                .into_response();
+        }
+    };
 
-    let result: GGGLeagueList = response.json().await.expect("Couldn't parse result");
+    let result: GGGLeagueList = match response.json().await {
+        Ok(value) => value,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Couldn't deserialize GGG League List",
+            )
+                .into_response();
+        }
+    };
 
-    Json(result)
+    (StatusCode::OK, Json(result)).into_response()
 }
 
 /// Get the specified cxapi realm and timestamp from the cache if it exists,
@@ -71,9 +92,13 @@ pub async fn get_specified_cxapi(
     time: i64,
 ) -> Result<GGGMarket> {
     let market = db_client.get_specific_change_id(time, realm).await?;
+
+    // TODO: I don't really like this function, too much logic in the else block
+    // should be like
+    // if let Some(val) = market {get_from_db()} else {get_from_GGG()};
     let response = if let Some(val) = market {
         serde_json::from_str::<RawCxApiResponse>(&val.payload)
-            .context("Should have been able to parse cached payload")?
+            .context("Should have been able to parse cached row")?
     } else {
         let base_url = "https://api.pathofexile.com/currency-exchange/";
 
@@ -107,7 +132,7 @@ pub async fn get_specified_cxapi(
 pub async fn most_recent_cxapi_handler(
     State(data): State<Arc<AppState>>,
     Query(params): Query<HashMap<String, String>>,
-) -> impl IntoResponse {
+) -> Response {
     let past_hour = (SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -116,7 +141,7 @@ pub async fn most_recent_cxapi_handler(
         * 3600
         - 3600;
 
-    let recent = get_specified_cxapi(
+    let recent = match get_specified_cxapi(
         &data.http_client,
         &data.cxapi_token,
         &data.db_client,
@@ -124,7 +149,11 @@ pub async fn most_recent_cxapi_handler(
         past_hour.try_into().unwrap(),
     )
     .await
-    .expect("Couldn't get most recent market");
-
-    Json(recent)
+    {
+        Ok(val) => val,
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Error pulling data.").into_response();
+        }
+    };
+    (StatusCode::OK, Json(recent)).into_response()
 }
