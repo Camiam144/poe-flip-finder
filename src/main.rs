@@ -3,7 +3,7 @@ use reqwest::Client;
 use std::{env, sync::Arc};
 
 use axum::{Router, routing::get};
-// mod api;
+mod api;
 // mod app;
 mod auth;
 mod db;
