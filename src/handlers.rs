@@ -8,8 +8,7 @@ use axum::{
 use reqwest::StatusCode;
 
 use crate::AppState;
-use crate::api::{get_leagues_from_ggg, get_most_recent_cxapi};
-use crate::db::DbClient;
+use crate::ggg_api::{get_leagues_from_ggg, get_most_recent_cxapi};
 use crate::models::api_models::GGGLeagueList;
 
 pub async fn handler_404() -> impl IntoResponse {
@@ -31,8 +30,7 @@ pub async fn hello_world_handler() -> impl IntoResponse {
     format!("Welcome to poe_flip_finder {}", env!("CARGO_PKG_VERSION"))
 }
 
-/// Get all current leagues from GGG's API. This should be cached and
-/// updated as needed instead of pinging it every time
+/// Get all current leagues
 pub async fn leagues_handler(
     State(data): State<Arc<AppState>>,
     Path(realm): Path<String>,

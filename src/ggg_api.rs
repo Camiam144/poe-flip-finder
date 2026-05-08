@@ -84,16 +84,16 @@ pub async fn get_most_recent_cxapi(state: Arc<AppState>, realm: &str) -> Result<
 }
 
 /// Get all current leagues from GGG's API. This should be cached and
-/// updated as needed instead of pinging it every time
-pub async fn get_leagues_from_ggg(data: Arc<AppState>, realm: &str) -> Result<GGGLeagueList> {
+/// updated as needed instead of pinging it every time.
+pub async fn get_leagues_from_ggg(state: Arc<AppState>, realm: &str) -> Result<GGGLeagueList> {
     // TODO: Cache these in the database, check once per day?
     // Cache on front end, expire once per day? Cache somewhere for sure
-    let token = &data.leagues_token;
+    let token = &state.leagues_token;
     let url = "https://api.pathofexile.com/leagues";
     let params = [("realm", realm)];
     let url = reqwest::Url::parse_with_params(url, &params)?;
 
-    let response = data
+    let response = state
         .http_client
         .get(url)
         .header(AUTHORIZATION, format!("Bearer {}", token))

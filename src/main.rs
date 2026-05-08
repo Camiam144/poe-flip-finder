@@ -3,7 +3,7 @@ use reqwest::Client;
 use std::{env, sync::Arc};
 
 use axum::{Router, routing::get};
-mod api;
+mod ggg_api;
 // mod app;
 mod auth;
 mod db;
@@ -28,7 +28,7 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().unwrap();
     let db_url = env::var("DB_URL").expect("No valid DB_URL");
     let db_client = DbClient::try_from_path(db_url.into())
         .await

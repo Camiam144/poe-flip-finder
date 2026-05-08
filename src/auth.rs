@@ -2,7 +2,6 @@ use anyhow::{Context, Ok, Result, anyhow};
 use reqwest::Url;
 use std::collections::HashMap;
 use std::fmt;
-use std::fs::{self, OpenOptions};
 use std::io::BufReader;
 use std::path::Path;
 use std::str::FromStr;
