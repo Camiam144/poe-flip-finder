@@ -7,9 +7,13 @@ use axum::{
 };
 use reqwest::StatusCode;
 
-use crate::AppState;
-use crate::ggg_api::{get_leagues_from_ggg, get_most_recent_cxapi};
 use crate::models::api_models::GGGLeagueList;
+use crate::{AppState, logic::get_ggg_base_prices};
+use crate::{ggg_api::get_update_data, logic};
+use crate::{
+    ggg_api::{get_leagues_from_ggg, get_most_recent_cxapi},
+    models::api_models::Market,
+};
 
 pub async fn handler_404() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, "Not found go 404 yourself")
@@ -52,7 +56,7 @@ pub async fn leagues_handler(
 }
 
 /// Get the entire Cxapi dump from the past hour. The current hour does not yet
-/// have information.
+/// have information. Accepts a query of the realm
 pub async fn most_recent_cxapi_handler(
     State(data): State<Arc<AppState>>,
     Query(params): Query<HashMap<String, String>>,
@@ -68,4 +72,43 @@ pub async fn most_recent_cxapi_handler(
         }
     };
     (StatusCode::OK, Json(recent)).into_response()
+}
+
+/// Update all of the data to the most recent version
+pub async fn update_data_handler(
+    State(data): State<Arc<AppState>>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let Some(realm) = params.get("realm") else {
+        return (StatusCode::BAD_REQUEST, "Invalid Realm").into_response();
+    };
+
+    match get_update_data(data, realm).await {
+        Ok(()) => (StatusCode::OK).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Error pulling data.").into_response(),
+    }
+}
+
+/// Get the whole list of arbitrage options
+pub async fn get_arbitrage_handler(
+    State(data): State<Arc<AppState>>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let Some(realm) = params.get("realm") else {
+        return (StatusCode::BAD_REQUEST, "Invalid Realm").into_response();
+    };
+
+    let current_records = match get_most_recent_cxapi(data, realm).await {
+        Ok(val) => val,
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Error pulling data.").into_response();
+        }
+    };
+
+    let base_rates = get_ggg_base_prices(&current_records.markets);
+
+    // TODO: Write this function in logic
+    let arbitrage = current_records;
+
+    (StatusCode::OK, Json(arbitrage)).into_response()
 }

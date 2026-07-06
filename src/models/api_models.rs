@@ -117,19 +117,6 @@ pub struct CurrencyData {
     pub volume_traded: u64,
 }
 
-// #[allow(dead_code)]
-// #[derive(Debug)]
-// pub struct ExchangeQueryResult {
-//     pub ts: u64,
-//     pub pair_id: u64,
-//     pub snapshot_id: u64,
-//     pub from_currency: String,
-//     pub to_currency: String,
-//     pub from_relative_price: f64,
-//     pub to_relative_price: f64,
-//     pub volume: f64,
-// }
-
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct ExchangeSnapshot {
@@ -147,6 +134,12 @@ pub struct CurrencyPairValues {
     pub cb: (TradingCurrencyType, u64),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum HubBridgeDir {
+    HubToBridge,
+    BridgeToHub,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RawMarket {
     pub league: String,
@@ -159,20 +152,12 @@ pub struct RawMarket {
     pub lowest_stock: HashMap<String, u64>,
 }
 
-/// This holds the bid/ask spread for a given market.
-// #[derive(Debug)]
-// pub struct BidAskSpread {
-//     item_1: TradingCurrencyType,
-//     item_2: TradingCurrencyType,
-//     bid: CurrencyPairValues,
-//     ask: CurrencyPairValues,
-// }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Market {
     pub league: String,
     pub curr_a: TradingCurrencyType,
     pub curr_b: TradingCurrencyType,
+    pub stronger: u8,
 
     pub volume_traded: CurrencyPairValues,
     pub highest_ratio: CurrencyPairValues,
@@ -180,26 +165,43 @@ pub struct Market {
     pub lowest_ratio: CurrencyPairValues,
     pub lowest_stock: CurrencyPairValues,
 }
-impl Market {
-    pub fn try_from_raw(raw: RawMarket) -> Result<Self> {
-        let (a, b) = raw
+impl TryFrom<RawMarket> for Market {
+    type Error = anyhow::Error;
+
+    fn try_from(value: RawMarket) -> std::result::Result<Self, Self::Error> {
+        let (a, b) = value
             .market_id
             .split_once('|')
             .context("Couldn't split market on vertical bar")?;
 
-        Ok(Self {
-            curr_a: TradingCurrencyType::from_str(a)?,
-            curr_b: TradingCurrencyType::from_str(b)?,
+        let curr_a = TradingCurrencyType::from_str(a)?;
+        let curr_b = TradingCurrencyType::from_str(b)?;
 
-            league: raw.league,
-            volume_traded: Market::pair_from_map(&raw.volume_traded, a, b)?,
-            highest_ratio: Market::pair_from_map(&raw.highest_ratio, a, b)?,
-            highest_stock: Market::pair_from_map(&raw.highest_stock, a, b)?,
-            lowest_ratio: Market::pair_from_map(&raw.lowest_ratio, a, b)?,
-            lowest_stock: Market::pair_from_map(&raw.lowest_stock, a, b)?,
+        let volume_traded = Market::try_pair_from_map(&value.volume_traded, a, b)?;
+
+        // TODO: Might want some more logic here, prefer trading currency if a tie?
+        let stronger = if volume_traded.ca.1 <= volume_traded.cb.1 {
+            0
+        } else {
+            1
+        };
+
+        Ok(Self {
+            curr_a: curr_a,
+            curr_b: curr_b,
+            stronger: stronger,
+
+            league: value.league,
+            volume_traded: volume_traded,
+            highest_ratio: Market::try_pair_from_map(&value.highest_ratio, a, b)?,
+            highest_stock: Market::try_pair_from_map(&value.highest_stock, a, b)?,
+            lowest_ratio: Market::try_pair_from_map(&value.lowest_ratio, a, b)?,
+            lowest_stock: Market::try_pair_from_map(&value.lowest_stock, a, b)?,
         })
     }
-    fn pair_from_map(
+}
+impl Market {
+    fn try_pair_from_map(
         map: &HashMap<String, u64>,
         curr_a: &str,
         curr_b: &str,
@@ -213,14 +215,31 @@ impl Market {
         })
     }
 
-    /// Get normalized bids and asks so we can get the correct ratios.
+    /// A market is a valid bridge if and only if exactly one currency is a trading
+    /// currency type (Exalt, Chaos, or Divine)
+    pub fn is_valid_bridge(&self) -> bool {
+        (!matches!(self.curr_a, TradingCurrencyType::Other(_))
+            && matches!(self.curr_b, TradingCurrencyType::Other(_)))
+            || (matches!(self.curr_a, TradingCurrencyType::Other(_))
+                && !matches!(self.curr_b, TradingCurrencyType::Other(_)))
+    }
+
+    /// Get normalized bids and asks so we can get the correct ratios
+    /// We always want the result returned in "hub currencies per item" so for
+    /// example if something is selling for 10 per divine we want the result to
+    /// be 0.1 divine. We will ignore any non hub currencies for now.
     pub fn get_normed_bid(&self) -> Option<f64> {
-        let (stronger, weaker) = if self.curr_a < self.curr_b {
+        let (stronger, weaker) = if self.stronger == 1 {
             (&self.lowest_ratio.cb, &self.lowest_ratio.ca)
         } else {
             (&self.lowest_ratio.ca, &self.lowest_ratio.cb)
         };
-        let normed = stronger.1 as f64 / weaker.1 as f64;
+
+        let normed = if weaker.1 != 0 {
+            stronger.1 as f64 / weaker.1 as f64
+        } else {
+            return None;
+        };
 
         if normed.is_infinite() || normed.is_nan() {
             return None;
@@ -229,12 +248,17 @@ impl Market {
     }
 
     pub fn get_normed_ask(&self) -> Option<f64> {
-        let (stronger, weaker) = if self.curr_a < self.curr_b {
+        let (stronger, weaker) = if self.stronger == 1 {
             (&self.highest_ratio.cb, &self.highest_ratio.ca)
         } else {
             (&self.highest_ratio.ca, &self.highest_ratio.cb)
         };
-        let normed = stronger.1 as f64 / weaker.1 as f64;
+
+        let normed = if weaker.1 != 0 {
+            stronger.1 as f64 / weaker.1 as f64
+        } else {
+            return None;
+        };
 
         if normed.is_infinite() || normed.is_nan() {
             return None;
@@ -243,33 +267,46 @@ impl Market {
     }
 
     /// Get the bid ask spread.
-    /// Currencies are ranked from weakest to strongest: Anything, Ex, Chaos, Div.
-    /// The Bid Ask Spread is presented as weaker per stronger (e.g. items per div)
+    /// The "stronger" currency is whichever costs more for that specific market
+    /// The Bid Ask Spread is presented as stronger per weaker: e.g. 1 item per 400 div
+    /// for expensive items or like 1 div per 12 items for cheaper items
     pub fn get_spread(&self) -> Option<(f64, TradingCurrencyType)> {
         let norm_bid = self.get_normed_bid()?;
         let norm_ask = self.get_normed_ask()?;
 
-        Some((norm_ask - norm_bid, self.curr_a.clone()))
+        let stronger = if self.stronger == 0 {
+            self.curr_a.clone()
+        } else {
+            self.curr_b.clone()
+        };
+
+        Some((norm_ask - norm_bid, stronger))
     }
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GGGMarket {
     pub next_change_id: u64,
     pub markets: Vec<Market>,
 }
 
-impl GGGMarket {
-    pub fn try_from_raw_cxapi_response(response: RawCxApiResponse) -> Result<Self> {
+impl TryFrom<RawCxApiResponse> for GGGMarket {
+    type Error = anyhow::Error;
+
+    fn try_from(response: RawCxApiResponse) -> std::result::Result<Self, Self::Error> {
         let parsed_markets: Vec<Market> = response
             .markets
             .into_iter()
-            .map(|m| Market::try_from_raw(m).expect("Should have been able to parse raw market"))
+            .filter_map(|m| Market::try_from(m).ok())
             .collect();
         Ok(GGGMarket {
             next_change_id: response.next_change_id,
             markets: parsed_markets,
         })
     }
+}
+
+impl GGGMarket {
     pub fn filter_league(&self, league: &str) -> Vec<&Market> {
         self.markets
             .iter()

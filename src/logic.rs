@@ -2,33 +2,15 @@ use crate::models::api_models::{ExchangeRecord, Market};
 use crate::models::logic_models::{TradingCurrencyRates, TradingCurrencyType};
 use std::collections::HashMap;
 
-pub fn get_base_prices(records: &[ExchangeRecord]) -> TradingCurrencyRates {
-    let mut rates = TradingCurrencyRates::default();
-    for record in records {
-        let currency_pair = record.trading_currency();
-        match currency_pair {
-            (TradingCurrencyType::Divine, TradingCurrencyType::Exalt) => {
-                rates.div_to_exalt = record.currency_one_data.relative_price;
-            }
-            (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt) => {
-                rates.chaos_to_exalt = record.currency_one_data.relative_price;
-            }
-            (_, _) => {}
-        }
-    }
-    rates.div_to_chaos = rates.div_to_exalt / rates.chaos_to_exalt;
-    rates
-}
-
 /// Get the average price of each actual trading currency
-pub fn get_ggg_base_prices(markets: &[&Market]) -> TradingCurrencyRates {
+pub fn get_ggg_base_prices(markets: &[Market]) -> TradingCurrencyRates {
     let mut rates = TradingCurrencyRates::default();
 
     for market in markets {
         match (&market.curr_a, &market.curr_b) {
             (TradingCurrencyType::Divine, TradingCurrencyType::Exalt)
             | (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => {
-                if market.highest_ratio.ca.0 == TradingCurrencyType::Exalt {
+                if market.lowest_ratio.ca.0 == TradingCurrencyType::Exalt {
                     rates.div_to_exalt = market.lowest_ratio.ca.1 as f64;
                 } else {
                     rates.div_to_exalt = market.lowest_ratio.cb.1 as f64;
@@ -36,7 +18,7 @@ pub fn get_ggg_base_prices(markets: &[&Market]) -> TradingCurrencyRates {
             }
             (TradingCurrencyType::Divine, TradingCurrencyType::Chaos)
             | (TradingCurrencyType::Chaos, TradingCurrencyType::Divine) => {
-                if market.highest_ratio.ca.0 == TradingCurrencyType::Chaos {
+                if market.lowest_ratio.ca.0 == TradingCurrencyType::Chaos {
                     rates.div_to_chaos = market.lowest_ratio.ca.1 as f64;
                 } else {
                     rates.div_to_chaos = market.lowest_ratio.cb.1 as f64;
@@ -44,7 +26,7 @@ pub fn get_ggg_base_prices(markets: &[&Market]) -> TradingCurrencyRates {
             }
             (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt)
             | (TradingCurrencyType::Exalt, TradingCurrencyType::Chaos) => {
-                if market.highest_ratio.ca.0 == TradingCurrencyType::Exalt {
+                if market.lowest_ratio.ca.0 == TradingCurrencyType::Exalt {
                     rates.chaos_to_exalt = market.lowest_ratio.ca.1 as f64;
                 } else {
                     rates.chaos_to_exalt = market.lowest_ratio.cb.1 as f64;
@@ -55,19 +37,16 @@ pub fn get_ggg_base_prices(markets: &[&Market]) -> TradingCurrencyRates {
     }
     rates
 }
-// What do we have to do once we have the values?
-// I think we're going to iterate over the filtered vector one time
-// Maybe we can do it after the filter step.
-// for each record we get the trading currency rate and we compare
-// the absolute difference of that rate to the matching tradingcurrencyrate value.
-// I think we then have another struct that's like {diff, ExchangeRecord} and
-// push that into a new vec. Sort that vec by absolute difference, then we can
-// pretty print the output? We need to compute the expected return at some point.
 
-type HubBridgeMap = (
-    HashMap<(TradingCurrencyType, String), f64>,
-    HashMap<(String, TradingCurrencyType), f64>,
-);
+/// Build a set of valid bridges that we can trade between.
+pub fn calculate_(markets: &[Market]) {
+    let bridges: Vec<&Market> = markets.iter().filter(|m| m.is_valid_bridge()).collect();
+}
+
+type HubToBridge = HashMap<(TradingCurrencyType, String), f64>;
+type BridgeToHub = HashMap<(String, TradingCurrencyType), f64>;
+
+type HubBridgeMap = (HubToBridge, BridgeToHub);
 
 pub fn build_hub_bridge_maps(records: &[&ExchangeRecord]) -> HubBridgeMap {
     // Build our lookup tables here so it's faster to scan every single
@@ -86,8 +65,8 @@ pub fn build_hub_bridge_maps(records: &[&ExchangeRecord]) -> HubBridgeMap {
 }
 
 pub fn build_bridges(
-    hub_to_bridge: &HashMap<(TradingCurrencyType, String), f64>,
-    bridge_to_hub: &HashMap<(String, TradingCurrencyType), f64>,
+    hub_to_bridge: &HubToBridge,
+    bridge_to_hub: &BridgeToHub,
 ) -> Vec<(TradingCurrencyType, String, TradingCurrencyType, f64)> {
     let mut results = Vec::new();
 
