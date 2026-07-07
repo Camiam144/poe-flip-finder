@@ -1,0 +1,353 @@
+use std::{
+    fs,
+    io::{self, Write},
+    path::PathBuf,
+};
+
+use anyhow::{Error, Result};
+
+use reqwest::Client;
+
+use crate::{
+    api::{self, get_leagues, get_most_recent_cxapi},
+    logic::{self, get_ggg_base_prices},
+    models::{
+        api_models::{ExchangeRecord, Market},
+        logic_models::{TradingCurrencyRates, TradingCurrencyType},
+    },
+};
+
+pub struct App {
+    should_quit: bool,
+    min_volume: f64,
+    min_profit_frac: f64,
+    top: usize,
+    client: Option<Client>,
+    data_path: PathBuf,
+
+    // Non-user facing data
+    current_snapshot: Option<u64>,
+    current_records: Option<Vec<ExchangeRecord>>,
+    base_rates: TradingCurrencyRates,
+    results: Option<Vec<(TradingCurrencyType, String, TradingCurrencyType, f64)>>,
+}
+
+impl App {
+    pub fn default() -> Self {
+        Self {
+            should_quit: false,
+            min_volume: 1000.0,
+            min_profit_frac: 0.05,
+            top: 10,
+            client: None,
+            data_path: PathBuf::from("data"),
+
+            current_snapshot: None,
+            current_records: None,
+            base_rates: TradingCurrencyRates::default(),
+            results: None,
+        }
+    }
+
+    pub async fn initialize(&mut self) {
+        println!("Welcome to POE 2 FLIP FINDER!");
+        println!("Running initial setup...");
+        println!("Use help for valid commands");
+        let client = Some(self.build_client().expect("Couldn't create client: "));
+        self.client = client;
+        self.list_leagues().await.unwrap();
+        self.refresh_data_if_needed().await.unwrap();
+        self.recalculate();
+        self.display_results();
+    }
+
+    pub async fn run(&mut self) {
+        self.initialize().await;
+        let result = self.repl().await;
+        result.unwrap()
+    }
+
+    pub async fn repl(&mut self) -> Result<(), Error> {
+        loop {
+            // I'm using built in libraries for now, this could always
+            // be grabbed from a different crate later.
+            if self.should_quit {
+                break;
+            }
+            print!(">> ");
+            io::stdout().flush().unwrap();
+
+            let mut line = String::new();
+            if io::stdin().read_line(&mut line).is_err() {
+                println!("Error reading input, try again.");
+                continue;
+            }
+            let cmd = line.trim();
+            self.handle_command(cmd).await?;
+        }
+        Ok(())
+    }
+
+    pub fn build_client(&self) -> Result<reqwest::Client> {
+        // TODO: This is where the bearer auth token should go
+        Ok(reqwest::Client::builder()
+            .user_agent("poeflipfinder/0.0.1 (contact: camiam144@gmail.com)")
+            .build()?)
+    }
+
+    pub async fn handle_command(&mut self, cmd: &str) -> Result<(), Error> {
+        // right now, valid commands are:
+        // volume #
+        // profit #.#
+        // top #
+        // refresh
+        // quit | exit
+        let mut cmd_parts: std::str::SplitWhitespace<'_> = cmd.split_whitespace();
+
+        match cmd_parts.next() {
+            Some("help") => {
+                println!("Valid commands are `command <type>` but don't type the <> chars...");
+                println!("help - display valid commands");
+                println!("quit or exit - quit the program");
+                println!("volume <float> - set the minimum trading volume");
+                println!("profit <float> - set the minimum trading profit");
+                println!("top <integer> - display the top <int> trades per currency");
+                println!("refresh - refresh the data if necessary")
+            }
+            Some("volume") => {
+                if let Some(arg) = cmd_parts.next() {
+                    if let Ok(vol) = arg.parse::<f64>() {
+                        self.min_volume = vol;
+                        println!("Min volume set {vol}");
+                        self.recalculate();
+                        self.display_results();
+                    } else {
+                        println!("Invalid setting for volume, use an integer.");
+                    }
+                }
+            }
+            Some("profit") => {
+                if let Some(arg) = cmd_parts.next() {
+                    if let Ok(profit) = arg.parse::<f64>() {
+                        self.min_profit_frac = profit;
+                        println!("Min profit frac set to {profit}");
+                        self.recalculate();
+                        self.display_results();
+                    } else {
+                        println!("Invalid setting for profit.");
+                    }
+                }
+            }
+            Some("top") => {
+                if let Some(arg) = cmd_parts.next() {
+                    if let Ok(top) = arg.parse::<usize>() {
+                        self.top = top;
+                        println!("Displaying top {top} results.");
+                        self.display_results();
+                    } else {
+                        println!("Invalid value for top, use int.")
+                    }
+                }
+            }
+            Some("refresh") => {
+                if let Err(e) = self.refresh_data_if_needed().await {
+                    eprintln!("Error refreshing data: {e}");
+                } else {
+                    self.display_results();
+                }
+            }
+            Some("bid") => {
+                if let Err(e) = self.test_ggg().await {
+                    println!("Can't get bid ask spreads {e}");
+                } else {
+                    println!("GGG gud");
+                }
+            }
+            Some("quit") | Some("exit") => self.should_quit = true,
+            Some(other) => println!("Unknown command: {other}"),
+            None => {}
+        };
+        Ok(())
+    }
+
+    pub async fn list_leagues(&self) -> Result<()> {
+        let leagues = get_leagues(
+            self.client
+                .as_ref()
+                .expect("Should have client at this point"),
+            "poe2",
+        )
+        .await?;
+
+        println!("Available leagues: ");
+
+        for (i, league) in leagues.iter().enumerate() {
+            println!("{}. {}", i + 1, league.id);
+        }
+
+        Ok(())
+    }
+
+    pub async fn test_ggg(&self) -> Result<()> {
+        // TODO: eventually need to pass league in here. Maybe I should instead
+        // pick a league and store it in the app context.
+        // This needs to check a cache just like the other side.
+        let whole_market = get_most_recent_cxapi(self.client.as_ref().unwrap()).await?;
+        let league = "Fate of the Vaal";
+        // println!("Newest snapshot val {}", whole_market.next_change_id);
+
+        let mut league_markets: Vec<&Market> = whole_market
+            .markets
+            .iter()
+            .filter(|&m| m.league == league && m.get_spread().is_some())
+            .collect::<Vec<&Market>>();
+
+        league_markets.sort_unstable_by(|a, b| {
+            b.get_spread()
+                .unwrap()
+                .1
+                .cmp(&a.get_spread().unwrap().1)
+                .then(f64::total_cmp(
+                    &b.get_spread().unwrap().0,
+                    &a.get_spread().unwrap().0,
+                ))
+        });
+
+        // println!("{:?}", &league_markets[0..3]);
+
+        let ggg_rates = get_ggg_base_prices(&league_markets);
+        println!("Divine to Exalt ratio {:?}", ggg_rates.div_to_exalt);
+        println!("Divine to Chaos ratio {:?}", ggg_rates.div_to_chaos);
+        println!("Chaos to Exalt ratio {:?}", ggg_rates.chaos_to_exalt);
+
+        let (divine_market, other_markets): (Vec<&Market>, Vec<&Market>) = league_markets
+            .iter()
+            .partition(|m| m.curr_a == TradingCurrencyType::Divine);
+
+        let (chaos_markets, exalt_markets): (Vec<&Market>, Vec<&Market>) = other_markets
+            .iter()
+            .partition(|m| m.curr_a == TradingCurrencyType::Chaos);
+
+        let mut all_markets: Vec<Vec<&Market>> = vec![divine_market];
+        all_markets.push(chaos_markets);
+        all_markets.push(exalt_markets);
+
+        for curr_market in all_markets {
+            println!("{}", curr_market[0].curr_a);
+            for market in curr_market[..10].iter() {
+                if let Some(spread) = market.get_spread() {
+                    let ask = match market.get_normed_ask() {
+                        Some(val) => val,
+                        None => continue,
+                    };
+                    let bid = match market.get_normed_bid() {
+                        Some(val) => val,
+                        None => continue,
+                    };
+                    println!(
+                        "Flipping {} for {} {} profit. Ask {} Bid {}.",
+                        market.curr_b, spread.0, spread.1, ask, bid
+                    );
+                }
+            }
+        }
+
+        for market in league_markets.iter() {
+            if market.curr_a == TradingCurrencyType::Other("primary-calamity-fragment".to_string())
+                || market.curr_b
+                    == TradingCurrencyType::Other("primary-calamity-fragment".to_string())
+            {
+                println!(
+                    "curr_a {} curr_b {} bid {} ask {} spread {:?}",
+                    market.curr_a,
+                    market.curr_b,
+                    market.get_normed_bid().unwrap_or(0_f64),
+                    market.get_normed_ask().unwrap_or(0_f64),
+                    market.get_spread().unwrap()
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn refresh_data_if_needed(&mut self) -> Result<()> {
+        let client = self.client.as_ref().unwrap();
+
+        let most_recent_snapshot = api::get_most_recent_cxapi(client).await?;
+        let newest_snapshot = most_recent_snapshot.epoch;
+
+        if self.current_snapshot != Some(newest_snapshot) {
+            println!("Refreshing data, newest snapshot {newest_snapshot}");
+
+            let cached_snapshots: Vec<fs::DirEntry> = api::list_all_snapshots(&self.data_path)?;
+
+            self.current_records = Some(
+                api::get_freshest_data(
+                    most_recent_snapshot.epoch,
+                    &cached_snapshots,
+                    client,
+                    &self.data_path,
+                )
+                .await?,
+            );
+            self.current_snapshot = Some(newest_snapshot);
+        } else {
+            println!("Already have newest snapshot {}", newest_snapshot);
+        }
+
+        Ok(())
+    }
+
+    pub fn recalculate(&mut self) {
+        // calculate all valid bridges and potential profits.
+
+        let current_records = self.current_records.as_ref().unwrap();
+        self.base_rates = logic::get_base_prices(current_records);
+
+        let valid_bridges: Vec<_> = current_records
+            .iter()
+            .filter(|exch| exch.volume >= self.min_volume && exch.is_valid_bridge())
+            .collect();
+
+        let (hub_to_bridge, bridge_to_hub) = logic::build_hub_bridge_maps(&valid_bridges);
+        let mut potential_profits = logic::build_bridges(&hub_to_bridge, &bridge_to_hub);
+
+        potential_profits
+            .retain(|elem| logic::eval_profit(elem, &self.base_rates, self.min_profit_frac));
+        potential_profits.sort_by(|a, b| b.3.abs().total_cmp(&a.3.abs()));
+        self.results = Some(potential_profits);
+    }
+
+    pub fn display_results(&self) {
+        println!(
+            "Settings => Vol: {} Profit: {} Res Shown: {}",
+            &self.min_volume, &self.min_profit_frac, &self.top
+        );
+        println!("Divine to Exalt ratio {:?}", &self.base_rates.div_to_exalt);
+        println!("Divine to Chaos ratio {:?}", &self.base_rates.div_to_chaos);
+        println!("Chaos to Exalt ratio {:?}", &self.base_rates.chaos_to_exalt);
+
+        for currency in [TradingCurrencyType::Divine, TradingCurrencyType::Chaos] {
+            println!("Top {} vals:", currency);
+            let rate = match currency {
+                TradingCurrencyType::Divine => self.base_rates.div_to_exalt,
+                TradingCurrencyType::Chaos => self.base_rates.chaos_to_exalt,
+                TradingCurrencyType::Exalt => 1.0 / self.base_rates.div_to_exalt,
+                TradingCurrencyType::Other(_) => 0.0,
+            };
+            let top_n_items =
+                logic::get_top_items(self.results.as_ref().unwrap(), &currency, self.top);
+            for elem in top_n_items {
+                println!(
+                    "{curr1:<7.7} -> {bridge:^25.25} -> {curr2:<8} | effective ratio: {ratio:>5.1} | profit {profit:>5.1} exalt",
+                    curr1 = elem.0,
+                    bridge = elem.1,
+                    curr2 = elem.2,
+                    ratio = elem.3,
+                    profit = elem.3 - rate
+                )
+            }
+        }
+    }
+}
