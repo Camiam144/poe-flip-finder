@@ -1,7 +1,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{Context, Ok, Result};
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use crate::models::logic_models::TradingCurrencyType;
@@ -284,6 +284,12 @@ impl Market {
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RawCxApiResponse {
+    pub next_change_id: u64,
+    pub markets: Vec<RawMarket>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GGGMarket {
     pub next_change_id: u64,
@@ -316,18 +322,19 @@ impl GGGMarket {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct GGGLeagueList {
+pub struct RawLeagueApiResponse {
     pub leagues: Vec<GGGLeague>,
 }
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GGGLeague {
     pub id: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct RawCxApiResponse {
-    pub next_change_id: u64,
-    pub markets: Vec<RawMarket>,
+    pub name: Option<String>,
+    pub realm: Option<String>,
+    pub url: Option<String>,
+    pub start_at: Option<String>,
+    pub end_at: Option<String>,
+    pub description: Option<String>,
 }
 
 #[cfg(test)]
