@@ -1,19 +1,19 @@
 use std::{collections::HashMap, sync::Arc};
 
 use axum::{
-    Json,
     extract::{Path, Query, State},
     response::{IntoResponse, Response},
+    Json,
 };
 use reqwest::StatusCode;
 
-use crate::models::api_models::GGGLeagueList;
-use crate::{AppState, logic::get_ggg_base_prices};
+use crate::models::api_models::RawLeagueApiResponse;
 use crate::{ggg_api::get_update_data, logic};
 use crate::{
     ggg_api::{get_leagues_from_ggg, get_most_recent_cxapi},
     models::api_models::Market,
 };
+use crate::{logic::get_ggg_base_prices, AppState};
 
 pub async fn handler_404() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, "Not found go 404 yourself")
@@ -39,14 +39,14 @@ pub async fn leagues_handler(
     State(data): State<Arc<AppState>>,
     Path(realm): Path<String>,
 ) -> Response {
-    let response = get_leagues_from_ggg(data, &realm).await;
+    let response = get_leagues_from_ggg(&data, &realm).await;
 
-    let result: GGGLeagueList = match response {
+    let result: RawLeagueApiResponse = match response {
         Ok(value) => value,
-        Err(_) => {
+        Err(err) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Couldn't get GGG League List",
+                format!("Couldn't get GGG League List\n{}", err),
             )
                 .into_response();
         }

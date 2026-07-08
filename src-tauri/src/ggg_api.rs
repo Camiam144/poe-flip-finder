@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::auth::AuthorizedScopes;
 use crate::db::DbClient;
-use crate::models::api_models::{GGGLeagueList, GGGMarket, RawCxApiResponse};
+use crate::models::api_models::{GGGMarket, RawCxApiResponse, RawLeagueApiResponse};
 use crate::{ApiClient, AppState};
 
 /// Make a call to GGG's CXAPI to get an entry
@@ -127,10 +127,11 @@ pub async fn get_update_data(state: Arc<AppState>, realm: &str) -> Result<()> {
 
 /// Get all current leagues from GGG's API. This should be cached and
 /// updated as needed instead of pinging it every time.
-pub async fn get_leagues_from_ggg(state: Arc<AppState>, realm: &str) -> Result<GGGLeagueList> {
+pub async fn get_leagues_from_ggg(state: &AppState, realm: &str) -> Result<RawLeagueApiResponse> {
     // TODO: Cache these in the database, check once per day?
     // Cache on front end, expire once per day? Cache somewhere for sure
-    let url = "https://api.pathofexile.com/leagues";
+    let url = "https://api.pathofexile.com/league";
+    let realm = if realm == "poe1" { "pc" } else { realm };
     let params = [("realm", realm)];
     let url = reqwest::Url::parse_with_params(url, &params)?;
 
@@ -138,9 +139,10 @@ pub async fn get_leagues_from_ggg(state: Arc<AppState>, realm: &str) -> Result<G
         .http_client
         .get_url(url.as_str(), AuthorizedScopes::Leagues)
         .await?;
-    // dbg!(&response);
 
-    let text_response = dbg!(response.text().await?);
+    let text_response = response.text().await?;
 
-    Ok(serde_json::from_str::<GGGLeagueList>(&text_response)?)
+    Ok(serde_json::from_str::<RawLeagueApiResponse>(
+        &text_response,
+    )?)
 }
