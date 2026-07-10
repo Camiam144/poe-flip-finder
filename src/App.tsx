@@ -1,5 +1,6 @@
 import { TopBar } from "./components/TopBar";
 import { QueryProvider } from "./state/QueryContext";
+import "./App.css";
 
 function App() {
   return (
