@@ -12,6 +12,8 @@ use tokio::time;
 
 use crate::db::DbClient;
 use crate::models::api_models::RawLeagueApiResponse;
+use crate::models::frontend_models::FrontendError;
+use crate::models::logic_models::TradingCurrencyRates;
 pub mod auth;
 pub mod db;
 pub mod ggg_api;
@@ -19,26 +21,32 @@ pub mod handlers;
 pub mod logic;
 pub mod models;
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!(
-        "Hello, {}! You've been greeted from Rust! Pretty cool!",
-        name
-    )
-}
-
 #[tauri::command(async)]
 async fn get_leagues(
     state: State<'_, AppState>,
     realm: String,
-) -> Result<RawLeagueApiResponse, String> {
+) -> Result<RawLeagueApiResponse, FrontendError> {
     // let state = state;
 
-    let res = ggg_api::get_leagues_from_ggg(&state, &realm)
+    ggg_api::get_leagues_from_ggg(&state, &realm)
+        .await
+        .map_err(FrontendError::from)
+}
+
+#[tauri::command(async)]
+async fn get_rates(
+    state: State<'_, AppState>,
+    league: String,
+    realm: String,
+) -> Result<TradingCurrencyRates, String> {
+    let all_markets = ggg_api::get_most_recent_cxapi(&state, &realm)
         .await
         .map_err(|err| err.to_string())?;
 
-    Ok(res)
+    let filtered_markets = all_markets.filter_league(&league);
+
+    let rates = logic::get_ggg_base_prices(&filtered_markets);
+    Ok(rates)
 }
 
 pub struct AppState {
@@ -69,7 +77,7 @@ pub fn run() {
             app.manage(app_state);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, get_leagues])
+        .invoke_handler(tauri::generate_handler![get_leagues])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

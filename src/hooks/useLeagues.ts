@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { League, Realm } from "../types/game";
-import { fetchLeagues } from "../api/tauri";
+import { fetchLeagues, isFrontendError } from "../api/tauri";
 
 interface UseLeaguesResult {
   leagues: League[];
@@ -26,11 +26,21 @@ export function useLeagues(realmId: Realm | null): UseLeaguesResult {
 
     fetchLeagues(realmId)
       .then((data) => {
-        if (!cancelled) setLeagues(data.leagues);
+        if (!cancelled) {
+          setLeagues(data.leagues);
+        }
       })
       .catch((err) => {
         console.log(err);
-        if (!cancelled) setError(String(err));
+        if (!cancelled && isFrontendError(err)) {
+          setError(
+            err.kind === "api"
+              ? `GGG had an oopsy: [${err.code}] [${err.message}]`
+              : `We had an oopsy: ${err.kind} - ${err.message}`,
+          );
+        } else {
+          setError("Unexpected error oh no");
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
