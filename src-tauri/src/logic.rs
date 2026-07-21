@@ -3,7 +3,7 @@ use crate::models::logic_models::{TradingCurrencyRates, TradingCurrencyType};
 use std::collections::HashMap;
 
 /// Get the average price of each actual trading currency
-pub fn get_ggg_base_prices(markets: &[Market]) -> TradingCurrencyRates {
+pub fn get_ggg_base_prices(markets: &[&Market]) -> TradingCurrencyRates {
     let mut rates = TradingCurrencyRates::default();
 
     for market in markets {

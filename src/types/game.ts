@@ -4,6 +4,11 @@ export interface RawLeagueApiResponse {
   leagues: League[];
 }
 
+export type FrontendError =
+  | { kind: "network"; message: string }
+  | { kind: "parse"; message: string }
+  | { kind: "api"; code: number; message: string };
+
 export interface League {
   id: string;
   name?: string;
@@ -12,4 +17,10 @@ export interface League {
   startAt?: string;
   endAt?: string;
   description?: string;
+}
+
+export interface TradingCurrencyRates {
+  div_to_exalt: number;
+  div_to_chaos: number;
+  chaos_to_exalt: number;
 }

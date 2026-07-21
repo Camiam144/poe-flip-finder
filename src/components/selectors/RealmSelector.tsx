@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQueryContext } from "../../state/QueryContext";
 import { Realm } from "../../types/game";
 
@@ -5,26 +6,45 @@ import { Realm } from "../../types/game";
 // by React state not by DOM. This is so other functions can trust this context
 // is correct.
 
-const REALMS: Realm[] = ["poe1", "xbox", "sony", "poe2"];
+// const REALMS: Realm[] = ["poe1", "xbox", "sony", "poe2"];
+const REALMS: Realm[] = ["poe1", "poe2"];
 
 export function RealmSelector() {
   const { realmId, setRealmId } = useQueryContext();
+  const [activeBtn, setActiveBtn] = useState("");
 
   return (
-    <select
-      className="selector realm-selector"
-      value={realmId ?? ""}
-      // disabled={isLoading}
-      onChange={(e) => setRealmId((e.target.value as Realm) || null)}
-    >
-      <option value="" disabled>
-        Select a Realm
-      </option>
-      {REALMS.map((realm) => (
-        <option key={realm} value={realm}>
-          {realm}
-        </option>
-      ))}
-    </select>
+    <div className="btn realm-selector">
+      <button
+        className="button realm-selector"
+        value={"poe1"}
+        onClick={(e) => {
+          setActiveBtn("btnPoe1");
+          setRealmId(e.currentTarget.value as Realm);
+        }}
+        style={{
+          fontWeight: activeBtn === "btnPoe1" ? "bold" : "normal",
+          opacity: activeBtn === "btnPoe1" ? 1 : 0.5,
+          transition: "opacity 0.3s ease",
+        }}
+      >
+        POE 1
+      </button>
+      <button
+        className="button realm-selector"
+        value={"poe2"}
+        onClick={(e) => {
+          setActiveBtn("btnPoe2");
+          setRealmId(e.currentTarget.value as Realm);
+        }}
+        style={{
+          fontWeight: activeBtn === "btnPoe2" ? "bold" : "normal",
+          opacity: activeBtn === "btnPoe2" ? 1 : 0.5,
+          transition: "opacity 0.3s ease",
+        }}
+      >
+        POE 2
+      </button>
+    </div>
   );
 }

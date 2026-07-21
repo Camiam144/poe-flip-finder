@@ -1,12 +1,14 @@
 //! This module contains stuff for working with GGG's API
 //! This is not internal API endpoints.
-use anyhow::{Context, Ok, Result};
+use anyhow::Context;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::auth::AuthorizedScopes;
 use crate::db::DbClient;
-use crate::models::api_models::{GGGMarket, RawCxApiResponse, RawLeagueApiResponse};
+use crate::models::api_models::{
+    ApiError, GGGMarket, GGGWrappedError, RawCxApiResponse, RawLeagueApiResponse,
+};
 use crate::{ApiClient, AppState};
 
 /// Make a call to GGG's CXAPI to get an entry
@@ -15,7 +17,7 @@ pub async fn get_specified_cxapi_from_ggg(
     db_client: &DbClient,
     realm: &str,
     time: i64,
-) -> Result<RawCxApiResponse> {
+) -> anyhow::Result<RawCxApiResponse> {
     let base_url = "https://api.pathofexile.com/currency-exchange/";
 
     // For some reason if the realm is "poe1" you need to not include it,
@@ -46,7 +48,7 @@ pub async fn get_specified_cxapi(
     db_client: &DbClient,
     realm: &str,
     time: i64,
-) -> Result<GGGMarket> {
+) -> anyhow::Result<GGGMarket> {
     let market = db_client.get_specific_change_id(time, realm).await?;
 
     let response = if let Some(val) = market {
@@ -63,7 +65,7 @@ pub async fn get_specified_cxapi(
 
 /// Get the entire Cxapi dump from the past hour. The current hour does not yet
 /// have information.
-pub async fn get_most_recent_cxapi(state: Arc<AppState>, realm: &str) -> Result<GGGMarket> {
+pub async fn get_most_recent_cxapi(state: &AppState, realm: &str) -> anyhow::Result<GGGMarket> {
     // Safety: duration_since UNIX_EPOCH should never fail unless the system clock is set
     // to before the UNIX_EPOCH
     let past_hour = (SystemTime::now()
@@ -85,7 +87,7 @@ pub async fn get_most_recent_cxapi(state: Arc<AppState>, realm: &str) -> Result<
 
 /// Update the database from the most recent recorded timestamp to the most recent available hour
 /// Use timers to avoid getting rate limited
-pub async fn get_update_data(state: Arc<AppState>, realm: &str) -> Result<()> {
+pub async fn get_update_data(state: Arc<AppState>, realm: &str) -> anyhow::Result<()> {
     let past_hour = ((SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -122,27 +124,56 @@ pub async fn get_update_data(state: Arc<AppState>, realm: &str) -> Result<()> {
     }
     dbg!("Database up to date");
 
-    Ok(())
+    anyhow::Ok(())
 }
 
 /// Get all current leagues from GGG's API. This should be cached and
 /// updated as needed instead of pinging it every time.
-pub async fn get_leagues_from_ggg(state: &AppState, realm: &str) -> Result<RawLeagueApiResponse> {
+pub async fn get_leagues_from_ggg(
+    state: &AppState,
+    realm: &str,
+) -> Result<RawLeagueApiResponse, ApiError> {
     // TODO: Cache these in the database, check once per day?
     // Cache on front end, expire once per day? Cache somewhere for sure
     let url = "https://api.pathofexile.com/league";
     let realm = if realm == "poe1" { "pc" } else { realm };
     let params = [("realm", realm)];
-    let url = reqwest::Url::parse_with_params(url, &params)?;
+    let url = reqwest::Url::parse_with_params(url, &params).expect("Malformed leagues url.");
 
     let response = state
         .http_client
         .get_url(url.as_str(), AuthorizedScopes::Leagues)
         .await?;
+    // dbg!(&response);
 
-    let text_response = response.text().await?;
+    let status = response.status();
+    let bytes = response.bytes().await?;
 
-    Ok(serde_json::from_str::<RawLeagueApiResponse>(
-        &text_response,
-    )?)
+    if status.is_success() {
+        match serde_json::from_slice::<RawLeagueApiResponse>(&bytes) {
+            Ok(data) => std::result::Result::Ok(data),
+            Err(parse_error) => {
+                // Wrapped error with success status code
+                if let Ok(wrap) = serde_json::from_slice::<GGGWrappedError>(&bytes) {
+                    Err(ApiError::Api {
+                        code: wrap.error.code,
+                        message: wrap.error.message,
+                    })
+                } else {
+                    Err(ApiError::Parse(parse_error))
+                }
+            }
+        }
+    } else {
+        match serde_json::from_slice::<GGGWrappedError>(&bytes) {
+            Ok(wrapped_error) => Err(ApiError::Api {
+                code: wrapped_error.error.code,
+                message: wrapped_error.error.message,
+            }),
+            Err(_) => Err(ApiError::Api {
+                code: (status.as_u16() as i32).into(),
+                message: format!("Bad status and unparseable body."),
+            }),
+        }
+    }
 }

@@ -1,6 +1,6 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, fmt, str::FromStr};
 
-use anyhow::{Context, Ok, Result};
+use anyhow::{Context, Result};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
@@ -187,12 +187,12 @@ impl TryFrom<RawMarket> for Market {
         };
 
         Ok(Self {
-            curr_a: curr_a,
-            curr_b: curr_b,
-            stronger: stronger,
+            curr_a,
+            curr_b,
+            stronger,
 
             league: value.league,
-            volume_traded: volume_traded,
+            volume_traded,
             highest_ratio: Market::try_pair_from_map(&value.highest_ratio, a, b)?,
             highest_stock: Market::try_pair_from_map(&value.highest_stock, a, b)?,
             lowest_ratio: Market::try_pair_from_map(&value.lowest_ratio, a, b)?,
@@ -335,6 +335,121 @@ pub struct GGGLeague {
     pub start_at: Option<String>,
     pub end_at: Option<String>,
     pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[repr(i32)]
+pub enum GGGErrorCode {
+    Accepted = 0,
+    ResourceNotFound = 1,
+    InvalidQuery = 2,
+    RateLimitExceeded = 3,
+    InternalError = 4,
+    UnexpectedContentType = 5,
+    Forbidden = 6,
+    TemporarilyUnavailable = 7,
+    Unauthorized = 8,
+    MethodNotAllowed = 9,
+    UnprocessableEntity = 10,
+    UnknownValue = 999,
+}
+impl fmt::Display for GGGErrorCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::Accepted => "Accepted",
+            Self::ResourceNotFound => "Resource Not Found",
+            Self::InvalidQuery => "Invalid Query",
+            Self::RateLimitExceeded => "Rate Limit Exceeded",
+            Self::InternalError => "Internal Error",
+            Self::UnexpectedContentType => "Unexpected Content Type",
+            Self::Forbidden => "Forbidden",
+            Self::TemporarilyUnavailable => "Temporarily Unavailable",
+            Self::Unauthorized => "Unauthorized",
+            Self::MethodNotAllowed => "Method Not Allowed",
+            Self::UnprocessableEntity => "Unprocessable Entity",
+            Self::UnknownValue => "Unknown Value Received",
+        };
+        write!(f, "{}", message)
+    }
+}
+
+impl From<GGGErrorCode> for i32 {
+    fn from(value: GGGErrorCode) -> Self {
+        match value {
+            GGGErrorCode::Accepted => 0,
+            GGGErrorCode::ResourceNotFound => 1,
+            GGGErrorCode::InvalidQuery => 2,
+            GGGErrorCode::RateLimitExceeded => 3,
+            GGGErrorCode::InternalError => 4,
+            GGGErrorCode::UnexpectedContentType => 5,
+            GGGErrorCode::Forbidden => 6,
+            GGGErrorCode::TemporarilyUnavailable => 7,
+            GGGErrorCode::Unauthorized => 8,
+            GGGErrorCode::MethodNotAllowed => 9,
+            GGGErrorCode::UnprocessableEntity => 10,
+            GGGErrorCode::UnknownValue => 999,
+        }
+    }
+}
+
+impl From<i32> for GGGErrorCode {
+    fn from(value: i32) -> Self {
+        match value {
+            0 => Self::Accepted,
+            1 => Self::ResourceNotFound,
+            2 => Self::InvalidQuery,
+            3 => Self::RateLimitExceeded,
+            4 => Self::InternalError,
+            5 => Self::UnexpectedContentType,
+            6 => Self::Forbidden,
+            7 => Self::TemporarilyUnavailable,
+            8 => Self::Unauthorized,
+            9 => Self::MethodNotAllowed,
+            10 => Self::UnprocessableEntity,
+            _ => Self::UnknownValue,
+        }
+    }
+}
+// impl TryFrom<i32> for GGGErrorCode {
+//     type Error = &'static str;
+//
+//     fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
+//         match value {
+//             0 => Ok(Self::Accepted),
+//             1 => Ok(Self::ResourceNotFound),
+//             2 => Ok(Self::InvalidQuery),
+//             3 => Ok(Self::RateLimitExceeded),
+//             4 => Ok(Self::InternalError),
+//             5 => Ok(Self::UnexpectedContentType),
+//             6 => Ok(Self::Forbidden),
+//             7 => Ok(Self::TemporarilyUnavailable),
+//             8 => Ok(Self::Unauthorized),
+//             9 => Ok(Self::MethodNotAllowed),
+//             10 => Ok(Self::UnprocessableEntity),
+//             _ => Ok(Self::UnknownValue),
+//             // _ => Err("Unknown code received"),
+//         }
+//     }
+// }
+
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+    #[error("network error: {0}")]
+    Network(#[from] reqwest::Error),
+    #[error("failed to parse response: {0}")]
+    Parse(#[from] serde_json::Error),
+    #[error("GGG API Error {code}: {message}")]
+    Api { code: GGGErrorCode, message: String },
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GGGErrorBody {
+    pub code: GGGErrorCode,
+    pub message: String,
+}
+#[derive(Debug, Deserialize)]
+pub struct GGGWrappedError {
+    pub error: GGGErrorBody,
 }
 
 #[cfg(test)]
