@@ -29,6 +29,7 @@ export function LeagueSelector() {
             ? "Loading leagues..."
             : "Select a League"}
       </option>
+      {/* I do the filtering here, maybe it should be on the backend? */}
       {leagues
         .filter(
           (league) =>

@@ -2,7 +2,12 @@
 // them in one place.
 import { invoke } from "@tauri-apps/api/core";
 import { getCachedLeagues, setCachedLeagues } from "../leagueCache";
-import type { FrontendError, RawLeagueApiResponse, Realm } from "../types/game";
+import type {
+  FrontendError,
+  RawLeagueApiResponse,
+  Realm,
+  TradingCurrencyRates,
+} from "../types/game";
 
 export function isFrontendError(err: unknown): err is FrontendError {
   return typeof err === "object" && err !== null && "kind" in err;
@@ -21,4 +26,15 @@ export async function fetchLeagues(
 
   setCachedLeagues(realmId, leagueResponse);
   return leagueResponse;
+}
+
+export async function fetchTradingCurrencyRates(
+  realmId: Realm,
+  leagueId: string,
+): Promise<TradingCurrencyRates> {
+  const tradingRates = await invoke<TradingCurrencyRates>("get_rates", {
+    realm: realmId,
+    league: leagueId,
+  });
+  return tradingRates;
 }

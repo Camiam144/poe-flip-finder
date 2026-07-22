@@ -39,7 +39,7 @@ export function useLeagues(realmId: Realm | null): UseLeaguesResult {
               : `We had an oopsy: ${err.kind} - ${err.message}`,
           );
         } else {
-          setError("Unexpected error oh no");
+          setError(`Unexpected error oh no: ${err}`);
         }
       })
       .finally(() => {

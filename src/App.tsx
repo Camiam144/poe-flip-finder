@@ -1,6 +1,7 @@
 import { TopBar } from "./components/TopBar";
 import { QueryProvider } from "./state/QueryContext";
 import "./App.css";
+import { TradingRateTable } from "./components/TradingRates";
 
 function App() {
   return (
@@ -10,7 +11,8 @@ function App() {
       <div className="app">
         <TopBar />
         <main className="app-main">
-          <p className="placeholder">Pick a realm and league</p>
+          {/* <p className="placeholder">Pick a realm and league</p> */}
+          <TradingRateTable />
         </main>
       </div>
     </QueryProvider>

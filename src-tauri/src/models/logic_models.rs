@@ -32,7 +32,7 @@ impl fmt::Display for TradingCurrencyType {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
 pub struct TradingCurrencyRates {
     pub div_to_exalt: f64,
     pub div_to_chaos: f64,

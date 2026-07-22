@@ -36,8 +36,8 @@ async fn get_leagues(
 #[tauri::command(async)]
 async fn get_rates(
     state: State<'_, AppState>,
-    league: String,
     realm: String,
+    league: String,
 ) -> Result<TradingCurrencyRates, String> {
     let all_markets = ggg_api::get_most_recent_cxapi(&state, &realm)
         .await
@@ -77,7 +77,7 @@ pub fn run() {
             app.manage(app_state);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_leagues])
+        .invoke_handler(tauri::generate_handler![get_leagues, get_rates])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
