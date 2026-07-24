@@ -8,11 +8,11 @@ interface TradingCurrencyResult {
   error: string | null;
 }
 
-// Since we make this depend on the realmId, this will rerun whenever that ID changes
+// Since we make this depend on the realmId & leagueID, this will rerun whenever that ID changes
 // so we get the update "for free" without having to explicitly call it.
 export function useTradingCurrencyRates(
-  realmId: Realm,
-  leagueId: League["id"],
+  realmId: Realm | null,
+  leagueId: League["id"] | null,
 ): TradingCurrencyResult {
   const [tradingRates, setRates] = useState<TradingCurrencyRates>({
     div_to_exalt: 0,
@@ -23,6 +23,9 @@ export function useTradingCurrencyRates(
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!realmId || !leagueId) {
+      return;
+    }
     let cancelled = false;
     setIsLoading(true);
     setError(null);
@@ -36,7 +39,7 @@ export function useTradingCurrencyRates(
       .catch((err) => {
         if (!cancelled) {
           console.log(err);
-          setError(err);
+          setError(String(err));
         }
       })
       .finally(() => {

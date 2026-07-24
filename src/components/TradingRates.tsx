@@ -9,6 +9,11 @@ function TradingRates({
   realmId: Realm | null;
   leagueId: string | null;
 }) {
+  let { tradingRates, isLoading, error } = useTradingCurrencyRates(
+    realmId,
+    leagueId,
+  );
+
   if (!realmId || !leagueId) {
     return (
       <tbody>
@@ -19,10 +24,6 @@ function TradingRates({
     );
   }
 
-  let { tradingRates, isLoading, error } = useTradingCurrencyRates(
-    realmId,
-    leagueId,
-  );
   return (
     <tbody>
       <tr>
