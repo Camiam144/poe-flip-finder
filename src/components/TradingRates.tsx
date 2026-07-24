@@ -1,6 +1,30 @@
 import { useQueryContext } from "../state/QueryContext";
 import { useTradingCurrencyRates } from "../hooks/useTradingRates";
-import { Realm } from "../types/game";
+import { Realm, TradingCurrencyRates } from "../types/game";
+
+const RatesTable = ({
+  tradingRates,
+}: {
+  tradingRates: TradingCurrencyRates;
+}) => (
+  <tbody>
+    <tr>
+      <td>Div</td>
+      <td>1 : {tradingRates.div_to_exalt.toFixed(2)}</td>
+      <td>Exalt</td>
+    </tr>
+    <tr>
+      <td>Div</td>
+      <td>1 : {tradingRates.div_to_chaos.toFixed(2)}</td>
+      <td>Chaos</td>
+    </tr>
+    <tr>
+      <td>Chaos:</td>
+      <td>1 : {tradingRates.chaos_to_exalt.toFixed(2)}</td>
+      <td>Exalt</td>
+    </tr>
+  </tbody>
+);
 
 function TradingRates({
   realmId,
@@ -18,30 +42,24 @@ function TradingRates({
     return (
       <tbody>
         <tr>
-          <td>Choose a Realm and League first.</td>
+          <td>Choose a Realm and League to display rates.</td>
         </tr>
       </tbody>
     );
   }
 
   return (
-    <tbody>
-      <tr>
-        <td>Div</td>
-        <td>1 : {tradingRates.div_to_exalt}</td>
-        <td>Exalt</td>
-      </tr>
-      <tr>
-        <td>Div</td>
-        <td>1 : {tradingRates.div_to_chaos}</td>
-        <td>Chaos</td>
-      </tr>
-      <tr>
-        <td>Chaos:</td>
-        <td>1 : {tradingRates.chaos_to_exalt}</td>
-        <td>Exalt</td>
-      </tr>
-    </tbody>
+    <>
+      {!isLoading ? (
+        <RatesTable tradingRates={tradingRates} />
+      ) : (
+        <tbody>
+          <tr>
+            <td>Loading...</td>
+          </tr>
+        </tbody>
+      )}
+    </>
   );
 }
 
