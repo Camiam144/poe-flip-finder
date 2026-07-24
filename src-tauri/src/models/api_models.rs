@@ -144,6 +144,7 @@ pub enum HubBridgeDir {
 pub struct RawMarket {
     pub league: String,
     pub market_id: String, // This is pipe separated chaos|divine
+    pub market_pair: Vec<String>,
 
     pub volume_traded: HashMap<String, u64>,
     pub highest_ratio: HashMap<String, u64>,
@@ -157,6 +158,7 @@ pub struct Market {
     pub league: String,
     pub curr_a: TradingCurrencyType,
     pub curr_b: TradingCurrencyType,
+    pub market_pair: Vec<String>,
     pub stronger: u8,
 
     pub volume_traded: CurrencyPairValues,
@@ -189,6 +191,7 @@ impl TryFrom<RawMarket> for Market {
         Ok(Self {
             curr_a,
             curr_b,
+            market_pair: value.market_pair,
             stronger,
 
             league: value.league,

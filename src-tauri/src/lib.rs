@@ -48,6 +48,7 @@ async fn get_rates(
     // dbg!(filtered_markets.first());
 
     let rates = logic::get_ggg_base_prices(&filtered_markets);
+    // dbg!(&rates);
     Ok(rates)
 }
 
