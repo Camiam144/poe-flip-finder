@@ -43,7 +43,9 @@ async fn get_rates(
         .await
         .map_err(|err| err.to_string())?;
 
+    // TODO: Should I cache this? Worth refiltering every time? Not sure.
     let filtered_markets = all_markets.filter_league(&league);
+    // dbg!(filtered_markets.first());
 
     let rates = logic::get_ggg_base_prices(&filtered_markets);
     Ok(rates)

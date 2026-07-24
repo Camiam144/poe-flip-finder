@@ -35,7 +35,9 @@ export function LeagueSelector() {
           (league) =>
             (!league.endAt || new Date(league.endAt) >= now) &&
             !(
-              league.id.includes("SSF") || league.id.includes("Solo Self-Found")
+              league.id.includes("SSF") ||
+              league.id.includes("Solo Self-Found") ||
+              league.id.includes("Ruthless")
             ),
         )
         .map((league) => (
