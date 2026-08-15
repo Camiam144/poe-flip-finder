@@ -13,14 +13,14 @@ pub fn get_ggg_base_prices(markets: &[&Market]) -> TradingCurrencyRates {
                 // dbg!(&market.volume_traded);
                 // dbg!(&market.highest_ratio);
                 // dbg!(&market.lowest_ratio);
-                if market.lowest_ratio.ca.0 == TradingCurrencyType::Exalt {
+                if market.lowest_ratio.curr_a.0 == TradingCurrencyType::Exalt {
                     // rates.div_to_exalt = market.lowest_ratio.ca.1 as f64;
                     rates.div_to_exalt =
-                        market.volume_traded.ca.1 as f64 / market.volume_traded.cb.1 as f64;
+                        market.volume_traded.curr_a.1 as f64 / market.volume_traded.curr_b.1 as f64;
                 } else {
                     // rates.div_to_exalt = market.lowest_ratio.cb.1 as f64;
                     rates.div_to_exalt =
-                        market.volume_traded.cb.1 as f64 / market.volume_traded.ca.1 as f64;
+                        market.volume_traded.curr_b.1 as f64 / market.volume_traded.curr_a.1 as f64;
                 }
             }
             (TradingCurrencyType::Divine, TradingCurrencyType::Chaos)
@@ -28,13 +28,13 @@ pub fn get_ggg_base_prices(markets: &[&Market]) -> TradingCurrencyRates {
                 // dbg!(&market.volume_traded);
                 // dbg!(&market.highest_ratio);
                 // dbg!(&market.lowest_ratio);
-                if market.lowest_ratio.ca.0 == TradingCurrencyType::Chaos {
+                if market.lowest_ratio.curr_a.0 == TradingCurrencyType::Chaos {
                     // rates.div_to_chaos = market.lowest_ratio.ca.1 as f64;
                     rates.div_to_chaos =
-                        market.volume_traded.ca.1 as f64 / market.volume_traded.cb.1 as f64;
+                        market.volume_traded.curr_a.1 as f64 / market.volume_traded.curr_b.1 as f64;
                 } else {
                     rates.div_to_chaos =
-                        market.volume_traded.cb.1 as f64 / market.volume_traded.ca.1 as f64;
+                        market.volume_traded.curr_b.1 as f64 / market.volume_traded.curr_a.1 as f64;
                     // rates.div_to_chaos = market.lowest_ratio.cb.1 as f64;
                 }
             }
@@ -43,14 +43,14 @@ pub fn get_ggg_base_prices(markets: &[&Market]) -> TradingCurrencyRates {
                 // dbg!(&market.volume_traded);
                 // dbg!(&market.highest_ratio);
                 // dbg!(&market.lowest_ratio);
-                if market.lowest_ratio.ca.0 == TradingCurrencyType::Exalt {
+                if market.lowest_ratio.curr_a.0 == TradingCurrencyType::Exalt {
                     // rates.chaos_to_exalt = market.lowest_ratio.ca.1 as f64;
                     rates.chaos_to_exalt =
-                        market.volume_traded.ca.1 as f64 / market.volume_traded.cb.1 as f64;
+                        market.volume_traded.curr_a.1 as f64 / market.volume_traded.curr_b.1 as f64;
                 } else {
                     // rates.chaos_to_exalt = market.lowest_ratio.cb.1 as f64;
                     rates.chaos_to_exalt =
-                        market.volume_traded.cb.1 as f64 / market.volume_traded.ca.1 as f64;
+                        market.volume_traded.curr_b.1 as f64 / market.volume_traded.curr_a.1 as f64;
                 }
             }
             (_, _) => {}

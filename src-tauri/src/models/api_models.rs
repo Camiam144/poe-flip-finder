@@ -130,8 +130,8 @@ pub struct ExchangeSnapshot {
 // These are the models for the offical GGG api
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CurrencyPairValues {
-    pub ca: (TradingCurrencyType, u64),
-    pub cb: (TradingCurrencyType, u64),
+    pub curr_a: (TradingCurrencyType, u64),
+    pub curr_b: (TradingCurrencyType, u64),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -182,7 +182,7 @@ impl TryFrom<RawMarket> for Market {
         let volume_traded = Market::try_pair_from_map(&value.volume_traded, a, b)?;
 
         // TODO: Might want some more logic here, prefer trading currency if a tie?
-        let stronger = if volume_traded.ca.1 <= volume_traded.cb.1 {
+        let stronger = if volume_traded.curr_a.1 <= volume_traded.curr_b.1 {
             0
         } else {
             1
@@ -213,8 +213,8 @@ impl Market {
         let val_b = map.get(curr_b).context("Couldn't find currency b in map")?;
 
         Ok(CurrencyPairValues {
-            ca: (TradingCurrencyType::from_str(curr_a)?, *val_a),
-            cb: (TradingCurrencyType::from_str(curr_b)?, *val_b),
+            curr_a: (TradingCurrencyType::from_str(curr_a)?, *val_a),
+            curr_b: (TradingCurrencyType::from_str(curr_b)?, *val_b),
         })
     }
 
@@ -233,9 +233,9 @@ impl Market {
     /// be 0.1 divine. We will ignore any non hub currencies for now.
     pub fn get_normed_bid(&self) -> Option<f64> {
         let (stronger, weaker) = if self.stronger == 1 {
-            (&self.lowest_ratio.cb, &self.lowest_ratio.ca)
+            (&self.lowest_ratio.curr_b, &self.lowest_ratio.curr_a)
         } else {
-            (&self.lowest_ratio.ca, &self.lowest_ratio.cb)
+            (&self.lowest_ratio.curr_a, &self.lowest_ratio.curr_b)
         };
 
         let normed = if weaker.1 != 0 {
@@ -252,9 +252,9 @@ impl Market {
 
     pub fn get_normed_ask(&self) -> Option<f64> {
         let (stronger, weaker) = if self.stronger == 1 {
-            (&self.highest_ratio.cb, &self.highest_ratio.ca)
+            (&self.highest_ratio.curr_b, &self.highest_ratio.curr_a)
         } else {
-            (&self.highest_ratio.ca, &self.highest_ratio.cb)
+            (&self.highest_ratio.curr_a, &self.highest_ratio.curr_b)
         };
 
         let normed = if weaker.1 != 0 {
@@ -413,27 +413,6 @@ impl From<i32> for GGGErrorCode {
         }
     }
 }
-// impl TryFrom<i32> for GGGErrorCode {
-//     type Error = &'static str;
-//
-//     fn try_from(value: i32) -> std::result::Result<Self, Self::Error> {
-//         match value {
-//             0 => Ok(Self::Accepted),
-//             1 => Ok(Self::ResourceNotFound),
-//             2 => Ok(Self::InvalidQuery),
-//             3 => Ok(Self::RateLimitExceeded),
-//             4 => Ok(Self::InternalError),
-//             5 => Ok(Self::UnexpectedContentType),
-//             6 => Ok(Self::Forbidden),
-//             7 => Ok(Self::TemporarilyUnavailable),
-//             8 => Ok(Self::Unauthorized),
-//             9 => Ok(Self::MethodNotAllowed),
-//             10 => Ok(Self::UnprocessableEntity),
-//             _ => Ok(Self::UnknownValue),
-//             // _ => Err("Unknown code received"),
-//         }
-//     }
-// }
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {

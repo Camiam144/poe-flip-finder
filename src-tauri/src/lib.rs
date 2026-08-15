@@ -52,6 +52,15 @@ async fn get_rates(
     Ok(rates)
 }
 
+#[tauri::command(async)]
+async fn update_database(state: State<'_, AppState>, realm: String) -> Result<String, String> {
+    ggg_api::get_update_data(&state, &realm)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok("success".to_string())
+}
+
 pub struct AppState {
     db_client: DbClient,
     http_client: ApiClient,
