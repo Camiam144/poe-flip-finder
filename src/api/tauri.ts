@@ -38,3 +38,10 @@ export async function fetchTradingCurrencyRates(
   });
   return tradingRates;
 }
+
+export async function fetchLastRefresh(realmId: Realm): Promise<string> {
+  const lastRefreshTime = await invoke<string>("get_most_recent_update_time", {
+    realm: realmId,
+  });
+  return lastRefreshTime;
+}

@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::models::api_models::ApiError;
+use crate::ggg_api::models::ApiError;
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]

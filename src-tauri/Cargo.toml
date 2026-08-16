@@ -33,6 +33,7 @@ governor = "0.10.4"
 nonzero_ext = "0.3.0"
 futures = "0.3.32"
 thiserror = "2.0.19"
+chrono = "0.4.45"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

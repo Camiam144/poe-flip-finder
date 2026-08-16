@@ -3,20 +3,14 @@
 //! with a little bit of history. Might be able to catch some explosive price
 //! changes in near-real time (with an hour or two lag) or overnight streamer-driven
 //! changes.
+pub mod models;
+use models::DbRow;
 use sqlx::migrate;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use sqlx::{query, query_as};
 use std::path::PathBuf;
 
 static MIGRATOR: migrate::Migrator = migrate!("./migrations");
-
-#[derive(sqlx::FromRow, Debug, PartialEq, Eq)]
-pub struct DbRow {
-    pub id: i64,
-    pub change_id: i64,
-    pub game_version: String,
-    pub payload: String,
-}
 
 #[derive(Debug)]
 pub struct DbClient {

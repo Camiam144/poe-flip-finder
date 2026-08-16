@@ -1,3 +1,4 @@
+import { LastRefreshedText } from "./LastRefresh";
 import { LeagueSelector } from "./selectors/LeagueSelector";
 import { RealmSelector } from "./selectors/RealmSelector";
 
@@ -5,9 +6,15 @@ import { RealmSelector } from "./selectors/RealmSelector";
 
 export function TopBar() {
   return (
-    <div className="top-bar">
-      <RealmSelector />
-      <LeagueSelector />
+    <div className="top-bar" style={{ display: "flex" }}>
+      <div>
+        <RealmSelector />
+        <LeagueSelector />
+      </div>
+      <div>
+        <LastRefreshedText />
+      </div>
+      <div style={{ marginLeft: "auto" }}>RefreshData</div>
     </div>
   );
 }
