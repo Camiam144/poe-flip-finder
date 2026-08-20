@@ -29,7 +29,6 @@ impl ApiClient {
         // We can either trickle them in at less than or equal to 1 per 2 seconds or we can burst 30 and
         // then wait for a minute. I'll keep it 1 request short and change this if I hit errors later.
         // Hardcoding for now since quota and RateLimiter need compile-time guarantees
-        // and can do some craziness with mutable Arcs (ArcSwap crate) later or something.
         // Will need a different limiter if I ever want to hit the river.
         let quota = Quota::with_period(Duration::from_secs(60) / 30).unwrap();
         Self {
@@ -60,7 +59,8 @@ impl ApiClient {
             .bearer_auth(token)
             .send()
             .await
-            .map_err(|e| ApiError::Network(e))?;
+            .map_err(ApiError::Network)?;
+
         // If we get hit with a 429, wait for
         if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
             let penalty_seconds: i64 = resp
@@ -72,7 +72,6 @@ impl ApiClient {
 
             self.penalty_until_ms
                 .store(now_ms() + penalty_seconds * 1000, Ordering::Relaxed);
-            // bail!("Hit 429 despite limiter, delaying for hopefully enough time.")
             return Err(ApiError::Api {
                 code: super::models::GGGErrorCode::RateLimitExceeded,
                 message: "Rate Limit Exceeded".to_string(),

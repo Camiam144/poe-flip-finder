@@ -76,8 +76,7 @@ pub async fn get_leagues_from_ggg(
     state: &AppState,
     realm: Realm,
 ) -> Result<RawLeagueApiResponse, ApiError> {
-    // TODO: Cache these in the database, check once per day?
-    // Cache on front end, expire once per day? Cache somewhere for sure
+    // TODO: Cache these somewhere, check once per day? Once per session?
     let url = "https://api.pathofexile.com/league";
     let realm = if realm == Realm::Poe1 {
         "pc"
