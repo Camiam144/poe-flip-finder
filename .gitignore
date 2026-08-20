@@ -28,3 +28,7 @@ dist-ssr
 .token
 .tokens
 creds.json
+
+src-tauri/src/data/*
+*.db
+base_items*
