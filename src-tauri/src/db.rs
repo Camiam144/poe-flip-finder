@@ -4,11 +4,14 @@
 //! changes in near-real time (with an hour or two lag) or overnight streamer-driven
 //! changes.
 pub mod models;
+pub mod transform;
 use models::DbRow;
 use sqlx::migrate;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use sqlx::{query, query_as};
 use std::path::PathBuf;
+
+use crate::ggg_api::Realm;
 
 static MIGRATOR: migrate::Migrator = migrate!("./migrations");
 
@@ -35,7 +38,7 @@ impl DbClient {
     pub async fn insert_data(
         &self,
         change_id: i64,
-        realm: &str,
+        realm: Realm,
         payload: &str,
     ) -> Result<(), sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
@@ -45,7 +48,7 @@ impl DbClient {
     ",
         )
         .bind(change_id)
-        .bind(realm)
+        .bind(realm.to_string())
         .bind(payload)
         .execute(&mut *conn)
         .await?;
@@ -57,7 +60,7 @@ impl DbClient {
     pub async fn get_specific_change_id(
         &self,
         change_id: i64,
-        realm: &str,
+        realm: Realm,
     ) -> Result<Option<DbRow>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
@@ -68,7 +71,7 @@ impl DbClient {
         AND game_version = $2;",
         )
         .bind(change_id)
-        .bind(realm)
+        .bind(realm.to_string())
         .fetch_optional(&mut *conn)
         .await?;
 
@@ -76,7 +79,7 @@ impl DbClient {
     }
 
     /// Retrieve the single most recent entry for the given game version
-    pub async fn get_latest(&self, realm: &str) -> Result<Option<DbRow>, sqlx::Error> {
+    pub async fn get_latest(&self, realm: Realm) -> Result<Option<DbRow>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
         let results: Option<DbRow> = query_as(
@@ -85,7 +88,7 @@ impl DbClient {
         ORDER BY change_id DESC
         LIMIT 1;",
         )
-        .bind(realm)
+        .bind(realm.to_string().to_lowercase())
         .fetch_optional(&mut *conn)
         .await?;
 
@@ -137,7 +140,7 @@ mod tests {
             .expect("Should have created in-memory db");
 
         let res = client
-            .insert_data(12345, "POE2", "{item : chaos_orb}")
+            .insert_data(12345, Realm::Poe2, "{item : chaos_orb}")
             .await;
         println!("res is {:?}", res);
         assert!(res.is_ok());
@@ -148,7 +151,7 @@ mod tests {
         let client = DbClient::try_in_memory()
             .await
             .expect("Should have created in-memory db");
-        let res = client.get_latest("POE1").await;
+        let res = client.get_latest(Realm::Poe1).await;
         assert!(res.is_ok_and(|x| x.is_none()));
     }
 
@@ -159,18 +162,18 @@ mod tests {
             .expect("Should have created in-memory db");
 
         client
-            .insert_data(12345, "POE1", "{}")
+            .insert_data(12345, Realm::Poe1, "{}")
             .await
             .expect("Should have inserted row");
-        let latest = client.get_latest("POE1").await;
+        let latest = client.get_latest(Realm::Poe1).await;
         let expected = DbRow {
             change_id: 12345,
             id: 1,
-            game_version: "POE1".to_string(),
+            game_version: "poe1".to_string(),
             payload: "{}".to_string(),
         };
 
-        assert!(latest.is_ok_and(|l| l.is_some_and(|x| x == expected)))
+        assert_eq!(latest.unwrap().unwrap(), expected);
     }
 
     #[tokio::test]
@@ -179,20 +182,19 @@ mod tests {
             .await
             .expect("Should have created in-memory db");
         client
-            .insert_data(12345, "POE1", "{}")
+            .insert_data(12345, Realm::Poe1, "{}")
             .await
             .expect("Should have been able to do first insert");
         client
-            .insert_data(12346, "POE1", "{}")
+            .insert_data(12346, Realm::Poe1, "{}")
             .await
             .expect("Should have been able to do second insert");
 
-        let res = client.get_specific_change_id(12346, "POE1").await;
+        let res = client.get_specific_change_id(12346, Realm::Poe1).await;
         let expected = DbRow {
             id: 2,
-
             change_id: 12346,
-            game_version: "POE1".to_string(),
+            game_version: "poe1".to_string(),
             payload: "{}".to_string(),
         };
         println!("result {:?}", res);
@@ -205,26 +207,25 @@ mod tests {
             .await
             .expect("Should have created in-memory db");
         client
-            .insert_data(12345, "POE1", "{}")
+            .insert_data(12345, Realm::Poe1, "{}")
             .await
             .expect("Should have been able to do first insert");
         client
-            .insert_data(12346, "POE1", "{}")
+            .insert_data(12346, Realm::Poe1, "{}")
             .await
             .expect("Should have been able to do second insert");
 
         let del = client.delete_old_entries(12346).await;
         assert!(del.is_ok());
 
-        let missing = client.get_specific_change_id(12345, "POE1").await;
+        let missing = client.get_specific_change_id(12345, Realm::Poe1).await;
         assert!(missing.is_ok_and(|m| m.is_none()));
 
-        let res = client.get_specific_change_id(12346, "POE1").await;
+        let res = client.get_specific_change_id(12346, Realm::Poe1).await;
         let expected = DbRow {
             id: 2,
-
             change_id: 12346,
-            game_version: "POE1".to_string(),
+            game_version: "poe1".to_string(),
             payload: "{}".to_string(),
         };
         println!("result {:?}", res);

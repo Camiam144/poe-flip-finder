@@ -1,12 +1,13 @@
 use anyhow::anyhow;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::ggg_api::get_specified_cxapi_from_ggg;
+use crate::ggg_api::{get_specified_cxapi_from_ggg, Realm};
 use crate::AppState;
 
 /// Update the database from the most recent recorded timestamp to the most recent available hour
 /// Use timers to avoid getting rate limited
-pub async fn get_update_data(state: &AppState, realm: &str) -> anyhow::Result<()> {
+pub async fn get_update_data(state: &AppState, realm: Realm) -> anyhow::Result<()> {
+    //TODO: Better error handling
     let past_hour = ((SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -18,7 +19,8 @@ pub async fn get_update_data(state: &AppState, realm: &str) -> anyhow::Result<()
 
     let most_recent_entry = state.db_client.get_latest(realm).await?;
     // TODO: If most_recent_entry is none, we need to either throw an error or
-    // pull data from the beginning?
+    // pull data from the beginning of time? Probably don't want to pull from the
+    // beginning of all time, but we will need a boundary at some point.
 
     // Build a list of which values we need
     if let Some(most_recent) = most_recent_entry {
@@ -65,4 +67,11 @@ pub async fn get_update_data(state: &AppState, realm: &str) -> anyhow::Result<()
 
     dbg!("Database up to date");
     anyhow::Ok(())
+}
+
+pub async fn clean_raw_responses() {
+    // This needs to determine which realm we're gonna clean and which leagues we're
+    // going to filter, then load those raw responses in from the db and clean them. I also think
+    // this means we need a flag in the DB to determine if we've already cleaned
+    // the response or not.
 }

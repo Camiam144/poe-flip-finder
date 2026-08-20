@@ -7,7 +7,9 @@
 .top-bar {
   display: flex;
   gap: 0.5rem;
-  align-items: center;
+  flex-direction: row;
+  /* align-items: center; */
+  justify-content: space-evenly;
   padding: 0.4rem 0.75rem;
   border-bottom: 1px solid #2a2a2a;
   flex-shrink: 0;

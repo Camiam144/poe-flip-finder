@@ -35,6 +35,14 @@ pub struct GGGLeague {
     pub start_at: Option<String>,
     pub end_at: Option<String>,
     pub description: Option<String>,
+    pub category: Option<Category>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Category {
+    pub id: String,
+    pub current: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -111,6 +119,7 @@ impl From<i32> for GGGErrorCode {
     }
 }
 
+// TODO: Add actual returned messages from GGG errors instead of writing them in.
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
     #[error("network error: {0}")]

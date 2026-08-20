@@ -45,3 +45,10 @@ export async function fetchLastRefresh(realmId: Realm): Promise<string> {
   });
   return lastRefreshTime;
 }
+
+export async function updateDatabase(realmId: Realm): Promise<string> {
+  const updateDataResult = await invoke<string>("update_database", {
+    realm: realmId,
+  });
+  return updateDataResult;
+}

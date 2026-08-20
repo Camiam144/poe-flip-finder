@@ -2,12 +2,14 @@
 // use anyhow::{bail, Ok, Result};
 use chrono::{DateTime, Local};
 use std::env;
+use std::str::FromStr;
 use tauri::Manager;
 use tauri::State;
 
 use crate::db::DbClient;
 use crate::ggg_api::client::{build_http_client, ApiClient};
 use crate::ggg_api::models::{RawCxApiResponse, RawLeagueApiResponse};
+use crate::ggg_api::Realm;
 use crate::models::api_models::GGGMarket;
 use crate::models::frontend_models::FrontendError;
 use crate::models::logic_models::TradingCurrencyRates;
@@ -24,8 +26,14 @@ async fn get_leagues(
     realm: String,
 ) -> Result<RawLeagueApiResponse, FrontendError> {
     // let state = state;
-
-    ggg_api::get_leagues_from_ggg(&state, &realm)
+    let api_realm: Realm = if let Ok(val) = Realm::from_str(&realm) {
+        val
+    } else {
+        return Err(FrontendError::Other {
+            message: "Invalid Realm Provided".to_string(),
+        });
+    };
+    ggg_api::get_leagues_from_ggg(&state, api_realm)
         .await
         .map_err(FrontendError::from)
 }
@@ -35,9 +43,15 @@ async fn get_most_recent_update_time(
     state: State<'_, AppState>,
     realm: String,
 ) -> Result<String, String> {
+    let api_realm: Realm = if let Ok(val) = Realm::from_str(&realm) {
+        val
+    } else {
+        return Err("Invalid Realm Provided".to_string());
+    };
+
     let most_recent = state
         .db_client
-        .get_latest(&realm)
+        .get_latest(api_realm)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -46,7 +60,7 @@ async fn get_most_recent_update_time(
         let local_time: DateTime<Local> = DateTime::from_timestamp_secs(time)
             .expect("Invalid timestamp")
             .with_timezone(&Local);
-        dbg!(local_time);
+        // dbg!(local_time);
         Ok(local_time.to_string())
     } else {
         Err(format!("No entry for realm {}", realm))
@@ -59,9 +73,14 @@ async fn get_rates(
     realm: String,
     league: String,
 ) -> Result<TradingCurrencyRates, String> {
+    let api_realm: Realm = if let Ok(val) = Realm::from_str(&realm) {
+        val
+    } else {
+        return Err("Invalid Realm Provided".to_string());
+    };
     let most_recent = state
         .db_client
-        .get_latest(&realm)
+        .get_latest(api_realm)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -86,7 +105,13 @@ async fn get_rates(
 
 #[tauri::command(async)]
 async fn update_database(state: State<'_, AppState>, realm: String) -> Result<String, String> {
-    sync::get_update_data(&state, &realm)
+    dbg!("Updating Data".to_string());
+    let api_realm: Realm = if let Ok(val) = Realm::from_str(&realm) {
+        val
+    } else {
+        return Err("Invalid Realm Provided".to_string());
+    };
+    sync::get_update_data(&state, api_realm)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -124,7 +149,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_leagues,
             get_rates,
-            get_most_recent_update_time
+            get_most_recent_update_time,
+            update_database,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

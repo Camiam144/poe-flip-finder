@@ -1,6 +1,7 @@
 use crate::auth;
+use crate::ggg_api::models::ApiError;
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
-use nonzero_ext::nonzero;
+// use nonzero_ext::nonzero;
 use reqwest::Client;
 use std::env;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -30,9 +31,7 @@ impl ApiClient {
         // Hardcoding for now since quota and RateLimiter need compile-time guarantees
         // and can do some craziness with mutable Arcs (ArcSwap crate) later or something.
         // Will need a different limiter if I ever want to hit the river.
-        let quota = Quota::with_period(Duration::from_secs(60) / 30)
-            .unwrap()
-            .allow_burst(nonzero!(30u32));
+        let quota = Quota::with_period(Duration::from_secs(60) / 30).unwrap();
         Self {
             http,
             limiter: RateLimiter::direct(quota),
@@ -46,7 +45,7 @@ impl ApiClient {
         &self,
         url: &str,
         required_scope: auth::AuthorizedScopes,
-    ) -> Result<reqwest::Response, reqwest::Error> {
+    ) -> Result<reqwest::Response, ApiError> {
         self.wait_out_penalty().await;
         self.limiter.until_ready().await;
 
@@ -55,7 +54,13 @@ impl ApiClient {
             auth::AuthorizedScopes::Leagues => &self.leagues_token,
         };
 
-        let resp = self.http.get(url).bearer_auth(token).send().await?;
+        let resp = self
+            .http
+            .get(url)
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| ApiError::Network(e))?;
         // If we get hit with a 429, wait for
         if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
             let penalty_seconds: i64 = resp
@@ -68,6 +73,10 @@ impl ApiClient {
             self.penalty_until_ms
                 .store(now_ms() + penalty_seconds * 1000, Ordering::Relaxed);
             // bail!("Hit 429 despite limiter, delaying for hopefully enough time.")
+            return Err(ApiError::Api {
+                code: super::models::GGGErrorCode::RateLimitExceeded,
+                message: "Rate Limit Exceeded".to_string(),
+            });
         }
 
         Ok(resp)
@@ -80,6 +89,10 @@ impl ApiClient {
             if until <= now {
                 return;
             }
+            dbg!(format!(
+                "Hit penalty, waiting {} ms",
+                self.penalty_until_ms.load(Ordering::Relaxed) - now_ms()
+            ));
             time::sleep(Duration::from_millis((until - now) as u64)).await;
         }
     }

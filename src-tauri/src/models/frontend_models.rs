@@ -8,6 +8,7 @@ pub enum FrontendError {
     Network { message: String },
     Parse { message: String },
     Api { code: i32, message: String },
+    Other { message: String },
 }
 
 impl From<ApiError> for FrontendError {

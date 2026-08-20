@@ -13,10 +13,10 @@ pub enum TradingCurrencyType {
 impl FromStr for TradingCurrencyType {
     type Err = Infallible;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "Exalted Orb" | "exalted" | "exalt" => TradingCurrencyType::Exalt,
-            "Chaos Orb" | "chaos" => TradingCurrencyType::Chaos,
-            "Divine Orb" | "divine" => TradingCurrencyType::Divine,
+        Ok(match s.to_lowercase().as_str() {
+            "exalted orb" | "exalted" | "exalt" => TradingCurrencyType::Exalt,
+            "chaos orb" | "chaos" => TradingCurrencyType::Chaos,
+            "divine orb" | "divine" => TradingCurrencyType::Divine,
             _ => TradingCurrencyType::Other(String::from(s)),
         })
     }
@@ -28,6 +28,15 @@ impl fmt::Display for TradingCurrencyType {
             TradingCurrencyType::Chaos => write!(f, "Chaos"),
             TradingCurrencyType::Divine => write!(f, "Divine"),
             TradingCurrencyType::Other(s) => write!(f, "Other: {}", s),
+        }
+    }
+}
+
+impl TradingCurrencyType {
+    pub fn is_hub(&self) -> bool {
+        match self {
+            Self::Other(_) => false,
+            _ => true,
         }
     }
 }
