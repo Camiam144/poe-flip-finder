@@ -16,13 +16,13 @@ pub enum Realm {
     Poe2,
 }
 impl FromStr for Realm {
-    type Err = &'static str;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "poe1" | "Poe1" | "POE1" => Ok(Realm::Poe1),
             "poe2" | "Poe2" | "POE2" => Ok(Realm::Poe2),
-            _ => Err("Invalid Realm (only poe1 and poe2 accepted)"),
+            _ => Err("Invalid Realm (only poe1 and poe2 accepted)".to_string()),
         }
     }
 }

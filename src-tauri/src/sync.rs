@@ -1,6 +1,13 @@
 use anyhow::{anyhow, Result};
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::db::models::GGGBaseItem;
+use crate::db::transform::clean_raw_row;
+use crate::ggg_api::models::GGGLeague;
 use crate::ggg_api::{get_specified_cxapi_from_ggg, Realm};
 use crate::AppState;
 
@@ -77,11 +84,74 @@ pub async fn get_update_data(state: &AppState, realm: Realm) -> anyhow::Result<(
     anyhow::Ok(())
 }
 
-pub async fn clean_raw_responses() {
-    // This needs to determine which realm we're gonna clean and which leagues we're
-    // going to filter, then load those raw responses in from the db and clean them. I also think
+fn map_items(original_map: &HashMap<String, GGGBaseItem>) -> HashMap<String, String> {
+    original_map
+        .iter()
+        .map(|m| (m.0.to_string(), m.1.name.to_string()))
+        .collect::<HashMap<String, String>>()
+}
+
+async fn load_item_mappings(realm: Realm) -> Result<HashMap<String, String>> {
+    // TODO: These shouldn't be hardcoded eventually.
+    let filepath = match realm {
+        Realm::Poe1 => Path::new("src/data/base_items.min.json"),
+        Realm::Poe2 => Path::new("src/data/base_items_poe2.min.json"),
+    };
+
+    let file = File::open(filepath)?;
+    let buf = BufReader::new(file);
+
+    let raw_mappings: HashMap<String, GGGBaseItem> = serde_json::from_reader(buf)?;
+
+    Ok(map_items(&raw_mappings))
+}
+
+pub async fn clean_raw_responses(
+    state: &AppState,
+    realm: Realm,
+    leagues: &[GGGLeague],
+) -> Result<()> {
+    // This needs to determine which leagues we're going to filter, then load
+    // those raw responses in from the db and clean them. I also think
     // this means we need a flag in the DB to determine if we've already cleaned
     // the response or not.
+
+    // Get up to 500 records, will need to check if we should keep going
+    // TODO: Put in check, if we hit 500 records we need to go again.
+    let unprocessed_rows = state.db_client.get_unprocessed_rows(realm).await?;
+
+    if unprocessed_rows.is_empty() {
+        dbg!("Nothing to process");
+        return Ok(());
+    }
+
+    // If we have records, we need to load our item map
+    let item_map = load_item_mappings(realm).await?;
+
+    for row in unprocessed_rows {
+        let cleaned_rows = clean_raw_row(&row, &item_map, leagues)?;
+
+        // Push parsed records
+        // Currently will fail if I push more than 1724 lines at once, hopefully
+        // filtering by league will help with this.
+        if cleaned_rows.len() > 1724 {
+            return Err(anyhow!(
+                "Too many records, over {:?}, filter more",
+                &cleaned_rows.len()
+            ));
+        }
+        state
+            .db_client
+            .insert_multiple_processed_rows(&cleaned_rows, realm)
+            .await?;
+
+        // Mark row as parsed
+        state
+            .db_client
+            .mark_record_as_processed(row.change_id, realm)
+            .await?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -104,5 +174,24 @@ mod test {
             list_hrs_between(start_time, should_be_empty),
             Vec::<i64>::new()
         );
+    }
+
+    #[test]
+    fn test_map_items() {
+        let item = GGGBaseItem {
+            name: "Exalted Orb".to_string(),
+            ..Default::default()
+        };
+
+        let map: HashMap<String, GGGBaseItem> = HashMap::from([(
+            "Metadata/Items/Currency/CurrencyAddModToRare".to_string(),
+            item,
+        )]);
+        let final_map: HashMap<String, String> = HashMap::from([(
+            "Metadata/Items/Currency/CurrencyAddModToRare".to_string(),
+            "Exalted Orb".to_string(),
+        )]);
+
+        assert_eq!(final_map, map_items(&map));
     }
 }

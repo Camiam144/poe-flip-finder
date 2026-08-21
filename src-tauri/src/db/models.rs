@@ -1,14 +1,16 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(sqlx::FromRow, Debug, PartialEq, Eq)]
+#[derive(sqlx::FromRow, Debug, PartialEq, Eq, Clone)]
 pub struct DbRow {
     pub id: i64,
     pub change_id: i64,
     pub game_version: String,
     pub payload: String,
+    pub parsed_bool: i64,
 }
 
+#[derive(sqlx::FromRow, Default, Debug, Clone, PartialEq, Eq)]
 pub struct ParsedDbRow {
     pub id: Option<i64>,
     pub change_id: i64,

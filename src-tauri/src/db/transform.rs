@@ -19,6 +19,7 @@ fn parse_market(
     item_name_mapping: &HashMap<String, String>,
     change_id: i64,
 ) -> Result<ParsedDbRow> {
+    // Safety: These are promised to be included by GGG
     let long_name_a = raw_market.market_pair.first().unwrap();
     let long_name_b = raw_market.market_pair.get(1).unwrap();
     // TODO: Fallback to long name if it's not in the json. This kinda fricks up
@@ -106,7 +107,7 @@ fn extract_currency_stats(market: &RawMarket, name: &str) -> Result<CurrencyStat
     })
 }
 
-pub fn clean_raw_response(
+pub fn clean_raw_row(
     raw_db_row: &DbRow,
     item_name_mapping: &HashMap<String, String>,
     leagues: &[GGGLeague],
@@ -142,11 +143,11 @@ mod tests {
     fn sample_item_map() -> HashMap<String, String> {
         HashMap::from([
             (
-                "Metadata/Currency/CurrencyAddModToRare".into(),
+                "Metadata/Items/Currency/CurrencyAddModToRare".into(),
                 "Exalted Orb".into(),
             ),
             (
-                "Metadata/Currency/CurrencyRerollRare".into(),
+                "Metadata/Items/Currency/CurrencyRerollRare".into(),
                 "Chaos Orb".into(),
             ),
         ])
@@ -157,13 +158,19 @@ mod tests {
         let market = sample_market(
             "Standard",
             [
-                "Metadata/Currency/CurrencyAddModToRare",
-                "Metadata/Currency/CurrencyRerollRare",
+                "Metadata/Items/Currency/CurrencyAddModToRare",
+                "Metadata/Items/Currency/CurrencyRerollRare",
             ],
         );
         let row = parse_market(&market, &sample_item_map(), 1).unwrap();
 
         assert_eq!(row.currency_a_name_common, "Exalted Orb");
         assert_eq!(row.currency_b_name_common, "Chaos Orb");
+    }
+    #[test]
+    fn test_missing_market_data() {
+        let mut market = sample_market("Standard", ["test_a", "test_b"]);
+        market.volume_traded.remove("test_a");
+        assert!(parse_market(&market, &sample_item_map(), 1).is_err());
     }
 }

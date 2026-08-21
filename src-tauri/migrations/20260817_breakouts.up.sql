@@ -43,3 +43,5 @@ CREATE TABLE IF NOT EXISTS poe1_markets (
 	is_hub_curr_a INTEGER,
 	is_hub_curr_b INTEGER
 );
+
+ALTER TABLE data ADD COLUMN parsed_bool INTEGER;
