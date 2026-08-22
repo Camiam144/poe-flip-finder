@@ -40,85 +40,85 @@ pub struct ParsedDbRow {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GGGBaseItem {
-    pub domain: String,
+    pub domain: Option<String>,
     #[serde(rename = "drop_level")]
-    pub drop_level: i64,
-    pub implicits: Vec<Value>,
+    pub drop_level: Option<i64>,
+    pub implicits: Option<Vec<Value>>,
     #[serde(rename = "inventory_height")]
-    pub inventory_height: i64,
+    pub inventory_height: Option<i64>,
     #[serde(rename = "inventory_width")]
-    pub inventory_width: i64,
+    pub inventory_width: Option<i64>,
     #[serde(rename = "inherits_from")]
-    pub inherits_from: String,
+    pub inherits_from: Option<String>,
     #[serde(rename = "item_class")]
-    pub item_class: String,
-    pub name: String,
-    pub properties: Properties,
+    pub item_class: Option<String>,
+    pub name: Option<String>,
+    pub properties: Option<Properties>,
     #[serde(rename = "release_state")]
-    pub release_state: String,
-    pub tags: Vec<String>,
+    pub release_state: Option<String>,
+    pub tags: Option<Vec<String>>,
     #[serde(rename = "visual_identity")]
-    pub visual_identity: VisualIdentity,
-    pub requirements: Value,
+    pub visual_identity: Option<VisualIdentity>,
+    pub requirements: Option<Value>,
     #[serde(rename = "grants_buff")]
-    pub grants_buff: Value,
+    pub grants_buff: Option<Value>,
     #[serde(rename = "skills_granted")]
-    pub skills_granted: Value,
+    pub skills_granted: Option<Value>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Properties {
-    pub armour: Value,
+    pub armour: Option<Value>,
     #[serde(rename = "energy_shield")]
-    pub energy_shield: Value,
-    pub evasion: Value,
-    pub ward: Value,
+    pub energy_shield: Option<Value>,
+    pub evasion: Option<Value>,
+    pub ward: Option<Value>,
     #[serde(rename = "movement_speed")]
-    pub movement_speed: Value,
-    pub block: Value,
-    pub description: String,
-    pub directions: String,
+    pub movement_speed: Option<Value>,
+    pub block: Option<Value>,
+    pub description: Option<String>,
+    pub directions: Option<String>,
     #[serde(rename = "stack_size")]
-    pub stack_size: i64,
+    pub stack_size: Option<i64>,
     #[serde(rename = "stack_size_currency_tab")]
-    pub stack_size_currency_tab: i64,
+    pub stack_size_currency_tab: Option<i64>,
     #[serde(rename = "full_stack_turns_into")]
-    pub full_stack_turns_into: Value,
+    pub full_stack_turns_into: Option<Value>,
     #[serde(rename = "charges_max")]
-    pub charges_max: Value,
+    pub charges_max: Option<Value>,
     #[serde(rename = "charges_per_use")]
-    pub charges_per_use: Value,
-    pub duration: Value,
+    pub charges_per_use: Option<Value>,
+    pub duration: Option<Value>,
     #[serde(rename = "life_per_use")]
-    pub life_per_use: Value,
+    pub life_per_use: Option<Value>,
     #[serde(rename = "mana_per_use")]
-    pub mana_per_use: Value,
+    pub mana_per_use: Option<Value>,
     #[serde(rename = "attack_time")]
-    pub attack_time: Value,
+    pub attack_time: Option<Value>,
     #[serde(rename = "critical_strike_chance")]
-    pub critical_strike_chance: Value,
+    pub critical_strike_chance: Option<Value>,
     #[serde(rename = "physical_damage_max")]
-    pub physical_damage_max: Value,
+    pub physical_damage_max: Option<Value>,
     #[serde(rename = "physical_damage_min")]
-    pub physical_damage_min: Value,
-    pub range: Value,
+    pub physical_damage_min: Option<Value>,
+    pub range: Option<Value>,
     #[serde(rename = "mana_burn_ms")]
-    pub mana_burn_ms: Value,
+    pub mana_burn_ms: Option<Value>,
     #[serde(rename = "cooldown_ms")]
-    pub cooldown_ms: Value,
+    pub cooldown_ms: Option<Value>,
     #[serde(rename = "monster_id")]
-    pub monster_id: Value,
+    pub monster_id: Option<Value>,
     #[serde(rename = "monster_ability_text")]
-    pub monster_ability_text: Value,
+    pub monster_ability_text: Option<Value>,
     #[serde(rename = "monster_category")]
-    pub monster_category: Value,
+    pub monster_category: Option<Value>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VisualIdentity {
     #[serde(rename = "dds_file")]
-    pub dds_file: String,
-    pub id: String,
+    pub dds_file: Option<String>,
+    pub id: Option<String>,
 }

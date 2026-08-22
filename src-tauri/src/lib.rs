@@ -3,22 +3,23 @@
 use chrono::{DateTime, Local};
 use std::env;
 use std::str::FromStr;
+use std::sync::Mutex;
 use tauri::Manager;
 use tauri::State;
 
-use crate::db::DbClient;
-use crate::ggg_api::client::{build_http_client, ApiClient};
-use crate::ggg_api::models::{RawCxApiResponse, RawLeagueApiResponse};
-use crate::ggg_api::Realm;
-use crate::models::api_models::GGGMarket;
-use crate::models::frontend_models::FrontendError;
-use crate::models::logic_models::TradingCurrencyRates;
 pub mod auth;
 pub mod db;
 pub mod ggg_api;
 pub mod logic;
 pub mod models;
 pub mod sync;
+
+use crate::db::DbClient;
+use crate::ggg_api::client::{build_http_client, ApiClient};
+use crate::ggg_api::models::{RawCxApiResponse, RawLeagueApiResponse, Realm};
+use crate::models::api_models::GGGMarket;
+use crate::models::frontend_models::FrontendError;
+use crate::models::logic_models::TradingCurrencyRates;
 
 #[tauri::command(async)]
 async fn get_leagues(
@@ -33,9 +34,37 @@ async fn get_leagues(
             message: "Invalid Realm Provided".to_string(),
         });
     };
-    ggg_api::get_leagues_from_ggg(&state, api_realm)
+    {
+        let cached_leagues = state.league_cache.lock().unwrap();
+
+        let maybe_cache = match api_realm {
+            Realm::Poe1 => cached_leagues[0].as_ref(),
+            Realm::Poe2 => cached_leagues[1].as_ref(),
+        };
+
+        if let Some(cached) = maybe_cache {
+            dbg!("Pulling leagues from cache");
+            return Ok(cached.clone());
+        }
+    }
+
+    // Didn't have a cached value, store the new value
+    let leagues = ggg_api::get_leagues_from_ggg(&state, api_realm)
         .await
-        .map_err(FrontendError::from)
+        .map_err(FrontendError::from)?;
+
+    {
+        let mut cached_leagues = state.league_cache.lock().unwrap();
+
+        dbg!("Caching leagues for {}", api_realm.to_string());
+
+        match api_realm {
+            Realm::Poe1 => cached_leagues[0] = Some(leagues.clone()),
+            Realm::Poe2 => cached_leagues[1] = Some(leagues.clone()),
+        };
+    }
+
+    Ok(leagues)
 }
 
 #[tauri::command(async)]
@@ -111,7 +140,11 @@ async fn update_database(state: State<'_, AppState>, realm: String) -> Result<St
     } else {
         return Err("Invalid Realm Provided".to_string());
     };
-    sync::get_update_data(&state, api_realm)
+    // sync::get_update_data(&state, api_realm)
+    //     .await
+    //     .map_err(|e| e.to_string())?;
+
+    sync::update_and_run_elt(&state, api_realm)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -121,6 +154,7 @@ async fn update_database(state: State<'_, AppState>, realm: String) -> Result<St
 pub struct AppState {
     db_client: DbClient,
     http_client: ApiClient,
+    league_cache: Mutex<[Option<RawLeagueApiResponse>; 2]>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -141,6 +175,7 @@ pub fn run() {
                 anyhow::Ok(AppState {
                     db_client,
                     http_client: api_client,
+                    league_cache: Mutex::new([None, None]),
                 })
             })?;
             app.manage(app_state);

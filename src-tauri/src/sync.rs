@@ -7,8 +7,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::db::models::GGGBaseItem;
 use crate::db::transform::clean_raw_row;
-use crate::ggg_api::models::GGGLeague;
-use crate::ggg_api::{get_specified_cxapi_from_ggg, Realm};
+use crate::ggg_api::get_specified_cxapi_from_ggg;
+use crate::ggg_api::models::{GGGLeague, Realm};
 use crate::AppState;
 
 async fn fetch_and_save_hour(state: &AppState, realm: Realm, change_id: i64) -> Result<()> {
@@ -87,15 +87,21 @@ pub async fn get_update_data(state: &AppState, realm: Realm) -> anyhow::Result<(
 fn map_items(original_map: &HashMap<String, GGGBaseItem>) -> HashMap<String, String> {
     original_map
         .iter()
-        .map(|m| (m.0.to_string(), m.1.name.to_string()))
+        .filter_map(|m| {
+            if m.1.name.is_some() {
+                Some((m.0.to_owned(), m.1.name.clone().unwrap()))
+            } else {
+                None
+            }
+        })
         .collect::<HashMap<String, String>>()
 }
 
 async fn load_item_mappings(realm: Realm) -> Result<HashMap<String, String>> {
     // TODO: These shouldn't be hardcoded eventually.
     let filepath = match realm {
-        Realm::Poe1 => Path::new("src/data/base_items.min.json"),
-        Realm::Poe2 => Path::new("src/data/base_items_poe2.min.json"),
+        Realm::Poe1 => Path::new("./data/base_items.min.json"),
+        Realm::Poe2 => Path::new("./data/base_items_poe2.min.json"),
     };
 
     let file = File::open(filepath)?;
@@ -110,7 +116,7 @@ pub async fn clean_raw_responses(
     state: &AppState,
     realm: Realm,
     leagues: &[GGGLeague],
-) -> Result<()> {
+) -> anyhow::Result<()> {
     // This needs to determine which leagues we're going to filter, then load
     // those raw responses in from the db and clean them. I also think
     // this means we need a flag in the DB to determine if we've already cleaned
@@ -123,23 +129,18 @@ pub async fn clean_raw_responses(
     if unprocessed_rows.is_empty() {
         dbg!("Nothing to process");
         return Ok(());
+    } else {
+        dbg!("Cleaning {} rows", &unprocessed_rows.len());
     }
 
     // If we have records, we need to load our item map
     let item_map = load_item_mappings(realm).await?;
+    let mut rows_processed: usize = 0;
 
     for row in unprocessed_rows {
         let cleaned_rows = clean_raw_row(&row, &item_map, leagues)?;
 
         // Push parsed records
-        // Currently will fail if I push more than 1724 lines at once, hopefully
-        // filtering by league will help with this.
-        if cleaned_rows.len() > 1724 {
-            return Err(anyhow!(
-                "Too many records, over {:?}, filter more",
-                &cleaned_rows.len()
-            ));
-        }
         state
             .db_client
             .insert_multiple_processed_rows(&cleaned_rows, realm)
@@ -150,7 +151,51 @@ pub async fn clean_raw_responses(
             .db_client
             .mark_record_as_processed(row.change_id, realm)
             .await?;
+
+        rows_processed += cleaned_rows.len();
     }
+    dbg!("Added {} processed rows", rows_processed);
+    Ok(())
+}
+
+/// Run the whole ELT pipeline on new data
+pub async fn update_and_run_elt(state: &AppState, realm: Realm) -> anyhow::Result<()> {
+    get_update_data(state, realm).await?;
+
+    {
+        let cached_leagues = state.league_cache.lock().unwrap();
+
+        let maybe_cache = match realm {
+            Realm::Poe1 => cached_leagues[0].as_ref(),
+            Realm::Poe2 => cached_leagues[1].as_ref(),
+        };
+
+        if maybe_cache.is_none() {
+            return Err(anyhow!("No leagues in league cache"));
+        }
+    }
+
+    let bad_names = ["SSF", "HC", "Ruthless", "Hardcore"];
+
+    let active_leagues: Vec<GGGLeague> = {
+        let cached_leagues = state.league_cache.lock().unwrap();
+        let cache = match realm {
+            Realm::Poe1 => cached_leagues[0].as_ref(),
+            Realm::Poe2 => cached_leagues[1].as_ref(),
+        };
+        cache
+            .unwrap()
+            .leagues
+            .iter()
+            .filter(|&l| {
+                l.is_active() && l.event.is_none() && !bad_names.iter().any(|s| l.id.contains(s))
+            })
+            .cloned()
+            .collect()
+    };
+
+    dbg!("Cleaning data for {}", &active_leagues);
+    clean_raw_responses(state, realm, &active_leagues).await?;
     Ok(())
 }
 

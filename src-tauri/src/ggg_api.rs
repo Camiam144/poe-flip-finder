@@ -1,39 +1,12 @@
 //! This module contains stuff for working with GGG's API
 pub mod client;
 pub mod models;
-use std::{fmt, str::FromStr};
 
 use client::ApiClient;
-use serde::{Deserialize, Serialize};
 
 use crate::auth::AuthorizedScopes;
 use crate::AppState;
-use models::{ApiError, GGGWrappedError, RawCxApiResponse, RawLeagueApiResponse};
-
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, Copy)]
-pub enum Realm {
-    Poe1,
-    Poe2,
-}
-impl FromStr for Realm {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "poe1" | "Poe1" | "POE1" => Ok(Realm::Poe1),
-            "poe2" | "Poe2" | "POE2" => Ok(Realm::Poe2),
-            _ => Err("Invalid Realm (only poe1 and poe2 accepted)".to_string()),
-        }
-    }
-}
-impl fmt::Display for Realm {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Poe1 => write!(f, "poe1"),
-            Self::Poe2 => write!(f, "poe2"),
-        }
-    }
-}
+use models::{ApiError, GGGWrappedError, RawCxApiResponse, RawLeagueApiResponse, Realm};
 
 /// Make a call to GGG's CXAPI to get an entry
 pub async fn get_specified_cxapi_from_ggg(
@@ -58,8 +31,8 @@ pub async fn get_specified_cxapi_from_ggg(
     // TODO: Validation
     let status = raw_response.status();
     let head = raw_response.headers();
-    dbg!(status);
-    dbg!(head);
+    dbg!("Response status: {}", status);
+    // dbg!(head);
 
     // In order to get both the raw text and the json we have to read the entire
     // stream to a string (consuming the stream), save the string, and then

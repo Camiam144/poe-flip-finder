@@ -5,15 +5,12 @@
 //! changes.
 pub mod models;
 pub mod transform;
-use models::DbRow;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
-use sqlx::{migrate, QueryBuilder, Sqlite};
-use sqlx::{query, query_as};
+use sqlx::{migrate, query, query_as, QueryBuilder, Sqlite};
 use std::path::PathBuf;
 
-use crate::db::models::ParsedDbRow;
-use crate::ggg_api::models::GGGLeague;
-use crate::ggg_api::Realm;
+use crate::db::models::{DbRow, ParsedDbRow};
+use crate::ggg_api::models::Realm;
 
 static MIGRATOR: migrate::Migrator = migrate!("./migrations");
 
@@ -83,7 +80,7 @@ impl DbClient {
         Ok(results)
     }
 
-    /// Get all unprocessed payloads for a given realm, limited to 500 values for
+    /// Get up to 500 unprocessed payloads for a given realm, limited to 500 values for
     /// memory issues, may need to run multiple times if it's been weeks/months since
     /// last update (24 points per day).
     pub async fn get_unprocessed_rows(&self, realm: Realm) -> Result<Vec<DbRow>, sqlx::Error> {
@@ -219,11 +216,10 @@ impl DbClient {
         );
 
         let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(query_str);
-        // TODO: This will silently fail if you try to push more than 1724 parsed
-        // rows at once, I should have something to not fail for that.
-        query_builder.push_values(
-            processed_rows.iter().take(SQLITE_BIND_LIMIT / 19),
-            |mut b, row| {
+        // INFO: This must be changed if the struct is ever changed
+        let fields_in_row = 19; // no good way to do this programatically?
+        for chunk in processed_rows.chunks(SQLITE_BIND_LIMIT / fields_in_row) {
+            query_builder.push_values(chunk, |mut b, row| {
                 b.push_bind(row.change_id)
                     .push_bind(&row.league)
                     .push_bind(&row.market_id)
@@ -243,11 +239,13 @@ impl DbClient {
                     .push_bind(row.lowest_ratio_currency_b)
                     .push_bind(row.is_hub_curr_a)
                     .push_bind(row.is_hub_curr_b);
-            },
-        );
+            });
 
-        let query = query_builder.build();
-        query.execute(&mut *conn).await?;
+            let query = query_builder.build();
+            query.execute(&mut *conn).await?;
+
+            query_builder.reset();
+        }
 
         Ok(())
     }

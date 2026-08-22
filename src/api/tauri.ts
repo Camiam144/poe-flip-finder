@@ -1,7 +1,7 @@
 // Every tauri command should live in here, that way I only have to register
 // them in one place.
 import { invoke } from "@tauri-apps/api/core";
-import { getCachedLeagues, setCachedLeagues } from "../leagueCache";
+// import { getCachedLeagues, setCachedLeagues } from "../leagueCache";
 import type {
   FrontendError,
   RawLeagueApiResponse,
@@ -16,15 +16,15 @@ export function isFrontendError(err: unknown): err is FrontendError {
 export async function fetchLeagues(
   realmId: Realm,
 ): Promise<RawLeagueApiResponse> {
-  const cached = getCachedLeagues(realmId);
-  if (cached) {
-    return cached;
-  }
+  // const cached = getCachedLeagues(realmId);
+  // if (cached) {
+  //   return cached;
+  // }
   const leagueResponse = await invoke<RawLeagueApiResponse>("get_leagues", {
     realm: realmId,
   });
 
-  setCachedLeagues(realmId, leagueResponse);
+  // setCachedLeagues(realmId, leagueResponse);
   return leagueResponse;
 }
 

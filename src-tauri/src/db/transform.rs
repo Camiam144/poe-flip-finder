@@ -22,6 +22,7 @@ fn parse_market(
     // Safety: These are promised to be included by GGG
     let long_name_a = raw_market.market_pair.first().unwrap();
     let long_name_b = raw_market.market_pair.get(1).unwrap();
+
     // TODO: Fallback to long name if it's not in the json. This kinda fricks up
     // the rest of the parsing but maybe we can fix in post? Or should we error?
     // Not sure yet.
@@ -35,7 +36,7 @@ fn parse_market(
     } else {
         long_name_b.clone()
     };
-    // INFO: Safety: Infallable
+    // Safety: Infallable
     let trading_a = TradingCurrencyType::from_str(&short_name_a).unwrap();
     let trading_b = TradingCurrencyType::from_str(&short_name_b).unwrap();
 
