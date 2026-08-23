@@ -1,56 +1,62 @@
+pub mod models;
 use crate::models::api_models::{ExchangeRecord, Market};
-use crate::models::logic_models::{TradingCurrencyRates, TradingCurrencyType};
+use models::{TradingCurrencyRates, TradingCurrencyType};
 use std::collections::HashMap;
 
 /// Get the average price of each actual trading currency
-pub fn get_ggg_base_prices(markets: &[&Market]) -> TradingCurrencyRates {
+pub fn get_base_prices(markets: &[models::Market]) -> TradingCurrencyRates {
     let mut rates = TradingCurrencyRates::default();
 
-    for market in markets {
-        match (&market.curr_a, &market.curr_b) {
+    let rate_markets: Vec<&models::Market> =
+        markets.iter().filter(|m| m.is_trading_rate()).collect();
+
+    dbg!(&rate_markets);
+
+    for market in markets.iter().filter(|m| m.is_trading_rate()) {
+        match (&market.currency_a, &market.currency_b) {
             (TradingCurrencyType::Divine, TradingCurrencyType::Exalt)
             | (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => {
+                // dbg!(&market.currency_a);
+                // dbg!(&market.currency_b);
                 // dbg!(&market.volume_traded);
                 // dbg!(&market.highest_ratio);
                 // dbg!(&market.lowest_ratio);
-                if market.lowest_ratio.curr_a.0 == TradingCurrencyType::Exalt {
-                    // rates.div_to_exalt = market.lowest_ratio.ca.1 as f64;
-                    rates.div_to_exalt =
-                        market.volume_traded.curr_a.1 as f64 / market.volume_traded.curr_b.1 as f64;
+                if market.currency_a == TradingCurrencyType::Exalt {
+                    rates.div_to_exalt = market.volume_traded_currency_a as f64
+                        / market.volume_traded_currency_b as f64;
                 } else {
-                    // rates.div_to_exalt = market.lowest_ratio.cb.1 as f64;
-                    rates.div_to_exalt =
-                        market.volume_traded.curr_b.1 as f64 / market.volume_traded.curr_a.1 as f64;
+                    rates.div_to_exalt = market.volume_traded_currency_b as f64
+                        / market.volume_traded_currency_a as f64;
                 }
             }
             (TradingCurrencyType::Divine, TradingCurrencyType::Chaos)
             | (TradingCurrencyType::Chaos, TradingCurrencyType::Divine) => {
+                // dbg!(&market.currency_a);
+                // dbg!(&market.currency_b);
                 // dbg!(&market.volume_traded);
                 // dbg!(&market.highest_ratio);
                 // dbg!(&market.lowest_ratio);
-                if market.lowest_ratio.curr_a.0 == TradingCurrencyType::Chaos {
-                    // rates.div_to_chaos = market.lowest_ratio.ca.1 as f64;
-                    rates.div_to_chaos =
-                        market.volume_traded.curr_a.1 as f64 / market.volume_traded.curr_b.1 as f64;
+                if market.currency_a == TradingCurrencyType::Chaos {
+                    rates.div_to_chaos = market.volume_traded_currency_a as f64
+                        / market.volume_traded_currency_b as f64;
                 } else {
-                    rates.div_to_chaos =
-                        market.volume_traded.curr_b.1 as f64 / market.volume_traded.curr_a.1 as f64;
-                    // rates.div_to_chaos = market.lowest_ratio.cb.1 as f64;
+                    rates.div_to_chaos = market.volume_traded_currency_b as f64
+                        / market.volume_traded_currency_a as f64;
                 }
             }
             (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt)
             | (TradingCurrencyType::Exalt, TradingCurrencyType::Chaos) => {
+                // dbg!(&market.currency_a);
+                // dbg!(&market.currency_b);
                 // dbg!(&market.volume_traded);
                 // dbg!(&market.highest_ratio);
                 // dbg!(&market.lowest_ratio);
-                if market.lowest_ratio.curr_a.0 == TradingCurrencyType::Exalt {
-                    // rates.chaos_to_exalt = market.lowest_ratio.ca.1 as f64;
-                    rates.chaos_to_exalt =
-                        market.volume_traded.curr_a.1 as f64 / market.volume_traded.curr_b.1 as f64;
+                if market.currency_a == TradingCurrencyType::Exalt {
+                    rates.chaos_to_exalt = market.volume_traded_currency_a as f64
+                        / market.volume_traded_currency_b as f64;
                 } else {
-                    // rates.chaos_to_exalt = market.lowest_ratio.cb.1 as f64;
-                    rates.chaos_to_exalt =
-                        market.volume_traded.curr_b.1 as f64 / market.volume_traded.curr_a.1 as f64;
+                    rates.chaos_to_exalt = market.volume_traded_currency_b as f64
+                        / market.volume_traded_currency_a as f64;
                 }
             }
             (_, _) => {}
@@ -60,9 +66,9 @@ pub fn get_ggg_base_prices(markets: &[&Market]) -> TradingCurrencyRates {
 }
 
 /// Build a set of valid bridges that we can trade between.
-pub fn calculate_(markets: &[Market]) {
-    let bridges: Vec<&Market> = markets.iter().filter(|m| m.is_valid_bridge()).collect();
-}
+// pub fn calculate_(markets: &[Market]) {
+//     let bridges: Vec<&Market> = markets.iter().filter(|m| m.is_valid_bridge()).collect();
+// }
 
 type HubToBridge = HashMap<(TradingCurrencyType, String), f64>;
 type BridgeToHub = HashMap<(String, TradingCurrencyType), f64>;

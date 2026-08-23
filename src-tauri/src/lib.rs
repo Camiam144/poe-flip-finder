@@ -16,10 +16,9 @@ pub mod sync;
 
 use crate::db::DbClient;
 use crate::ggg_api::client::{build_http_client, ApiClient};
-use crate::ggg_api::models::{RawCxApiResponse, RawLeagueApiResponse, Realm};
-use crate::models::api_models::GGGMarket;
+use crate::ggg_api::models::{RawLeagueApiResponse, Realm};
+use crate::logic::models::TradingCurrencyRates;
 use crate::models::frontend_models::FrontendError;
-use crate::models::logic_models::TradingCurrencyRates;
 
 #[tauri::command(async)]
 async fn get_leagues(
@@ -56,7 +55,7 @@ async fn get_leagues(
     {
         let mut cached_leagues = state.league_cache.lock().unwrap();
 
-        dbg!("Caching leagues for {}", api_realm.to_string());
+        // dbg!("Caching leagues for {}", api_realm.to_string());
 
         match api_realm {
             Realm::Poe1 => cached_leagues[0] = Some(leagues.clone()),
@@ -80,7 +79,7 @@ async fn get_most_recent_update_time(
 
     let most_recent = state
         .db_client
-        .get_latest(api_realm)
+        .get_latest_raw(api_realm)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -109,25 +108,27 @@ async fn get_rates(
     };
     let most_recent = state
         .db_client
-        .get_latest(api_realm)
+        .get_latest_parsed_marketplace(api_realm, &league)
         .await
         .map_err(|e| e.to_string())?;
 
-    // Is there a cleaner way to write this?
-    let response = if let Some(val) = most_recent {
-        serde_json::from_str::<RawCxApiResponse>(&val.payload).map_err(|e| e.to_string())?
-    } else {
-        return Err::<TradingCurrencyRates, String>("Couldn't Find Most Recent Entry".to_string());
-    };
+    if most_recent.is_empty() {
+        return Err(format!(
+            "No most recent entry for {} and {}",
+            api_realm, league
+        ));
+    }
 
-    let all_markets = GGGMarket::try_from(response).map_err(|e| e.to_string())?;
+    // TODO: This should probably be cached in a kv cache in app state, like the
+    // leagues are in a vector.
+    let all_markets: Vec<logic::models::Market> = most_recent
+        .iter()
+        .map(logic::models::Market::from)
+        .collect();
 
-    // TODO: Should I cache this? Worth refiltering every time? Not sure.
-    // What I should be doing is working this out in my ETL/ELT pipeline that I
-    // haven't written yet.
-    let filtered_markets = all_markets.filter_league(&league);
+    // dbg!("num markets {}", &all_markets.len());
 
-    let rates = logic::get_ggg_base_prices(&filtered_markets);
+    let rates = logic::get_base_prices(&all_markets);
     // dbg!(&rates);
     Ok(rates)
 }
@@ -140,9 +141,6 @@ async fn update_database(state: State<'_, AppState>, realm: String) -> Result<St
     } else {
         return Err("Invalid Realm Provided".to_string());
     };
-    // sync::get_update_data(&state, api_realm)
-    //     .await
-    //     .map_err(|e| e.to_string())?;
 
     sync::update_and_run_elt(&state, api_realm)
         .await

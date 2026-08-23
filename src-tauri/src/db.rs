@@ -250,6 +250,23 @@ impl DbClient {
         Ok(())
     }
 
+    /// Retrieve the single most recent raw entry for the given game version
+    pub async fn get_latest_raw(&self, realm: Realm) -> Result<Option<DbRow>, sqlx::Error> {
+        let mut conn = self.pool.acquire().await?;
+
+        let results: Option<DbRow> = query_as(
+            "SELECT id, change_id, game_version, payload, parsed_bool FROM data
+        WHERE game_version = $1
+        ORDER BY change_id DESC
+        LIMIT 1;",
+        )
+        .bind(realm.to_string().to_lowercase())
+        .fetch_optional(&mut *conn)
+        .await?;
+
+        Ok(results)
+    }
+
     /// Retrieve the entire processed marketplace for a given change_id, realm, and league
     pub async fn get_parsed_marketplace(
         &self,
@@ -273,30 +290,39 @@ impl DbClient {
         Ok(results)
     }
 
-    /// Retrieve the single most recent entry for the given game version
-    pub async fn get_latest(&self, realm: Realm) -> Result<Option<DbRow>, sqlx::Error> {
+    /// Retrieve the latest parsed data for a given realm and league
+    pub async fn get_latest_parsed_marketplace(
+        &self,
+        realm: Realm,
+        league_id: &str,
+    ) -> Result<Vec<ParsedDbRow>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
+        let table_name = get_table_name(realm);
+        let query_str = format!(
+            "SELECT max(change_id) FROM {} WHERE league = $1;",
+            table_name
+        );
 
-        let results: Option<DbRow> = query_as(
-            "SELECT id, change_id, game_version, payload, parsed_bool FROM data
-        WHERE game_version = $1
-        ORDER BY change_id DESC
-        LIMIT 1;",
-        )
-        .bind(realm.to_string().to_lowercase())
-        .fetch_optional(&mut *conn)
-        .await?;
+        let max_change_id: Option<(i64,)> = query_as(&query_str)
+            .bind(league_id)
+            .fetch_optional(&mut *conn)
+            .await?;
 
-        Ok(results)
+        if max_change_id.is_none() {
+            return Ok(Vec::new());
+        } else {
+            self.get_parsed_marketplace(max_change_id.unwrap().0, realm, league_id)
+                .await
+        }
     }
 
-    // Delete entries older than a cutoff to prevent the DB from growing too large
+    // Delete parsed entries older than a cutoff to prevent the DB from growing too large
     pub async fn delete_old_entries(&self, cutoff_timestamp: i64) -> Result<(), sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
         let _ = query(
             "DELETE FROM data
-        WHERE change_id < $1;",
+        WHERE change_id < $1 and parsed_bool = 1;",
         )
         .bind(cutoff_timestamp)
         .execute(&mut *conn)
@@ -352,7 +378,7 @@ mod tests {
         let client = DbClient::try_in_memory()
             .await
             .expect("Should have created in-memory db");
-        let res = client.get_latest(Realm::Poe1).await;
+        let res = client.get_latest_raw(Realm::Poe1).await;
         assert!(res.is_ok_and(|x| x.is_none()));
     }
 
@@ -366,7 +392,7 @@ mod tests {
             .insert_data(12345, Realm::Poe1, "{}")
             .await
             .expect("Should have inserted row");
-        let latest = client.get_latest(Realm::Poe1).await;
+        let latest = client.get_latest_raw(Realm::Poe1).await;
         let expected = DbRow {
             change_id: 12345,
             id: 1,

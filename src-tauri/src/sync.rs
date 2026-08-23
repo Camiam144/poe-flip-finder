@@ -49,7 +49,7 @@ pub async fn get_update_data(state: &AppState, realm: Realm) -> anyhow::Result<(
     let past_hour = previous_hour_change_id()?;
     dbg!(format!("Most recent hour should be {}", past_hour));
 
-    let most_recent_entry = state.db_client.get_latest(realm).await?;
+    let most_recent_entry = state.db_client.get_latest_raw(realm).await?;
 
     // TODO: Need an "out" to pull from a specific timestamp if we don't have history
     // for some reason.
@@ -194,7 +194,7 @@ pub async fn update_and_run_elt(state: &AppState, realm: Realm) -> anyhow::Resul
             .collect()
     };
 
-    dbg!("Cleaning data for {}", &active_leagues);
+    // dbg!("Cleaning data for {}", &active_leagues);
     clean_raw_responses(state, realm, &active_leagues).await?;
     Ok(())
 }

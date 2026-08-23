@@ -5,7 +5,7 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use crate::ggg_api::models::{RawCxApiResponse, RawMarket};
-use crate::models::logic_models::TradingCurrencyType;
+use crate::logic::models::TradingCurrencyType;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
@@ -91,7 +91,6 @@ impl ExchangeRecord {
     }
 }
 
-// #[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrencyInfo {
@@ -104,7 +103,6 @@ pub struct CurrencyInfo {
     pub icon_url: String,
 }
 
-// #[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 pub struct CurrencyData {
