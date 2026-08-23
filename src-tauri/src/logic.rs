@@ -1,5 +1,5 @@
 pub mod models;
-use crate::models::api_models::{ExchangeRecord, Market};
+use crate::models::api_models::ExchangeRecord;
 use models::{TradingCurrencyRates, TradingCurrencyType};
 use std::collections::HashMap;
 
@@ -10,7 +10,7 @@ pub fn get_base_prices(markets: &[models::Market]) -> TradingCurrencyRates {
     let rate_markets: Vec<&models::Market> =
         markets.iter().filter(|m| m.is_trading_rate()).collect();
 
-    dbg!(&rate_markets);
+    // dbg!(&rate_markets);
 
     for market in markets.iter().filter(|m| m.is_trading_rate()) {
         match (&market.currency_a, &market.currency_b) {

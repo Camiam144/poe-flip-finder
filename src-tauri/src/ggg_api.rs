@@ -5,8 +5,9 @@ pub mod models;
 use client::ApiClient;
 
 use crate::auth::AuthorizedScopes;
+use crate::errors::{GGGApiError, GGGWrappedError};
 use crate::AppState;
-use models::{ApiError, GGGWrappedError, RawCxApiResponse, RawLeagueApiResponse, Realm};
+use models::{RawCxApiResponse, RawLeagueApiResponse, Realm};
 
 /// Make a call to GGG's CXAPI to get an entry
 pub async fn get_specified_cxapi_from_ggg(
@@ -29,9 +30,10 @@ pub async fn get_specified_cxapi_from_ggg(
     // I need to do some error checking to make sure I'm not storing invalid responses
     // What do I need to check? Http code and that we have a non-empty body?
     // TODO: Validation
-    let status = raw_response.status();
-    let head = raw_response.headers();
-    dbg!("Response status: {}", status);
+
+    // let status = raw_response.status();
+    // let head = raw_response.headers();
+    // dbg!("Response status: {}", status);
     // dbg!(head);
 
     // In order to get both the raw text and the json we have to read the entire
@@ -48,7 +50,7 @@ pub async fn get_specified_cxapi_from_ggg(
 pub async fn get_leagues_from_ggg(
     state: &AppState,
     realm: Realm,
-) -> Result<RawLeagueApiResponse, ApiError> {
+) -> Result<RawLeagueApiResponse, GGGApiError> {
     // TODO: Cache these somewhere, check once per day? Once per session?
     let url = "https://api.pathofexile.com/league";
     let realm = if realm == Realm::Poe1 {
@@ -74,24 +76,21 @@ pub async fn get_leagues_from_ggg(
             Err(parse_error) => {
                 // Wrapped error with success status code
                 if let Ok(wrap) = serde_json::from_slice::<GGGWrappedError>(&bytes) {
-                    Err(ApiError::Api {
+                    Err(GGGApiError::Api {
                         code: wrap.error.code,
-                        message: wrap.error.message,
                     })
                 } else {
-                    Err(ApiError::Parse(parse_error))
+                    Err(GGGApiError::Parse(parse_error))
                 }
             }
         }
     } else {
         match serde_json::from_slice::<GGGWrappedError>(&bytes) {
-            Ok(wrapped_error) => Err(ApiError::Api {
+            Ok(wrapped_error) => Err(GGGApiError::Api {
                 code: wrapped_error.error.code,
-                message: wrapped_error.error.message,
             }),
-            Err(_) => Err(ApiError::Api {
+            Err(_) => Err(GGGApiError::Api {
                 code: (status.as_u16() as i32).into(),
-                message: "Bad status and unparseable body.".to_string(),
             }),
         }
     }

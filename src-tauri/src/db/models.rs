@@ -1,6 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum UpdateOutcome {
+    Success,
+    NoUpdateNeeded,
+}
+
 #[derive(sqlx::FromRow, Debug, PartialEq, Eq, Clone)]
 pub struct DbRow {
     pub id: i64,

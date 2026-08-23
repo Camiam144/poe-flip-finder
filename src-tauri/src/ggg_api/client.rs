@@ -1,5 +1,5 @@
 use crate::auth;
-use crate::ggg_api::models::ApiError;
+use crate::errors::{GGGApiError, GGGErrorCode};
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
 // use nonzero_ext::nonzero;
 use reqwest::Client;
@@ -44,7 +44,7 @@ impl ApiClient {
         &self,
         url: &str,
         required_scope: auth::AuthorizedScopes,
-    ) -> Result<reqwest::Response, ApiError> {
+    ) -> Result<reqwest::Response, GGGApiError> {
         self.wait_out_penalty().await;
         self.limiter.until_ready().await;
 
@@ -59,7 +59,7 @@ impl ApiClient {
             .bearer_auth(token)
             .send()
             .await
-            .map_err(ApiError::Network)?;
+            .map_err(GGGApiError::Network)?;
 
         // If we get hit with a 429, wait for
         if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
@@ -72,9 +72,8 @@ impl ApiClient {
 
             self.penalty_until_ms
                 .store(now_ms() + penalty_seconds * 1000, Ordering::Relaxed);
-            return Err(ApiError::Api {
-                code: super::models::GGGErrorCode::RateLimitExceeded,
-                message: "Rate Limit Exceeded".to_string(),
+            return Err(GGGApiError::Api {
+                code: GGGErrorCode::RateLimitExceeded,
             });
         }
 

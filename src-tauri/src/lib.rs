@@ -1,24 +1,25 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 // use anyhow::{bail, Ok, Result};
-use chrono::{DateTime, Local};
-use std::env;
-use std::str::FromStr;
-use std::sync::Mutex;
-use tauri::Manager;
-use tauri::State;
-
 pub mod auth;
 pub mod db;
+pub mod errors;
 pub mod ggg_api;
 pub mod logic;
 pub mod models;
 pub mod sync;
 
+use chrono::{DateTime, Local};
+use std::env;
+use std::str::FromStr;
+use std::sync::Mutex;
+use tauri::{Manager, State};
+
+use crate::db::models::UpdateOutcome;
 use crate::db::DbClient;
+use crate::errors::FrontendError;
 use crate::ggg_api::client::{build_http_client, ApiClient};
 use crate::ggg_api::models::{RawLeagueApiResponse, Realm};
 use crate::logic::models::TradingCurrencyRates;
-use crate::models::frontend_models::FrontendError;
 
 #[tauri::command(async)]
 async fn get_leagues(
@@ -100,23 +101,26 @@ async fn get_rates(
     state: State<'_, AppState>,
     realm: String,
     league: String,
-) -> Result<TradingCurrencyRates, String> {
+) -> Result<TradingCurrencyRates, FrontendError> {
     let api_realm: Realm = if let Ok(val) = Realm::from_str(&realm) {
         val
     } else {
-        return Err("Invalid Realm Provided".to_string());
+        return Err(FrontendError::InvalidInput {
+            message: "Invalid Realm Provided".to_string(),
+        });
     };
     let most_recent = state
         .db_client
         .get_latest_parsed_marketplace(api_realm, &league)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| FrontendError::Database {
+            message: e.to_string(),
+        })?;
 
     if most_recent.is_empty() {
-        return Err(format!(
-            "No most recent entry for {} and {}",
-            api_realm, league
-        ));
+        return Err(FrontendError::Database {
+            message: format!("No most recent entry for {} and {}", api_realm, league),
+        });
     }
 
     // TODO: This should probably be cached in a kv cache in app state, like the
@@ -134,19 +138,26 @@ async fn get_rates(
 }
 
 #[tauri::command(async)]
-async fn update_database(state: State<'_, AppState>, realm: String) -> Result<String, String> {
+async fn update_database(
+    state: State<'_, AppState>,
+    realm: String,
+) -> Result<UpdateOutcome, FrontendError> {
     dbg!("Updating Data".to_string());
     let api_realm: Realm = if let Ok(val) = Realm::from_str(&realm) {
         val
     } else {
-        return Err("Invalid Realm Provided".to_string());
+        return Err(FrontendError::InvalidInput {
+            message: ("Invalid Realm Provided".to_string()),
+        });
     };
 
-    sync::update_and_run_elt(&state, api_realm)
+    let update_result = sync::update_and_run_elt(&state, api_realm)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| FrontendError::Database {
+            message: (e.to_string()),
+        })?;
 
-    Ok("success".to_string())
+    Ok(update_result)
 }
 
 pub struct AppState {

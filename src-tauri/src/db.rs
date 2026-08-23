@@ -308,15 +308,14 @@ impl DbClient {
             .fetch_optional(&mut *conn)
             .await?;
 
-        if max_change_id.is_none() {
-            return Ok(Vec::new());
+        if let Some(id) = max_change_id {
+            self.get_parsed_marketplace(id.0, realm, league_id).await
         } else {
-            self.get_parsed_marketplace(max_change_id.unwrap().0, realm, league_id)
-                .await
+            Ok(Vec::new())
         }
     }
 
-    // Delete parsed entries older than a cutoff to prevent the DB from growing too large
+    /// Delete parsed entries older than a cutoff to prevent the DB from growing too large
     pub async fn delete_old_entries(&self, cutoff_timestamp: i64) -> Result<(), sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
@@ -444,6 +443,11 @@ mod tests {
             .await
             .expect("Should have been able to do second insert");
 
+        client
+            .mark_record_as_processed(12345, Realm::Poe1)
+            .await
+            .expect("Should have been able to mark record.");
+
         let del = client.delete_old_entries(12346).await;
         assert!(del.is_ok());
 
@@ -458,7 +462,7 @@ mod tests {
             payload: "{}".to_string(),
             parsed_bool: 0,
         };
-        println!("result {:?}", res);
+        // println!("result {:?}", res);
         assert!(res.is_ok_and(|f| f.is_some_and(|v| v == expected)));
     }
 

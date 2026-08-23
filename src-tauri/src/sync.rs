@@ -5,7 +5,7 @@ use std::io::BufReader;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::db::models::GGGBaseItem;
+use crate::db::models::{GGGBaseItem, UpdateOutcome};
 use crate::db::transform::clean_raw_row;
 use crate::ggg_api::get_specified_cxapi_from_ggg;
 use crate::ggg_api::models::{GGGLeague, Realm};
@@ -44,7 +44,7 @@ fn list_hrs_between(start: i64, end: i64) -> Vec<i64> {
 
 /// Update the database from the most recent recorded timestamp to the most recent available hour
 /// Use timers to avoid getting rate limited
-pub async fn get_update_data(state: &AppState, realm: Realm) -> anyhow::Result<()> {
+pub async fn get_update_data(state: &AppState, realm: Realm) -> anyhow::Result<UpdateOutcome> {
     //TODO: Better error handling
     let past_hour = previous_hour_change_id()?;
     dbg!(format!("Most recent hour should be {}", past_hour));
@@ -65,7 +65,7 @@ pub async fn get_update_data(state: &AppState, realm: Realm) -> anyhow::Result<(
     let change_ids = list_hrs_between(most_recent_change_id, past_hour);
     if change_ids.is_empty() {
         dbg!("Database already up to date");
-        return Ok(());
+        return Ok(UpdateOutcome::NoUpdateNeeded);
     }
 
     dbg!(format!(
@@ -81,7 +81,7 @@ pub async fn get_update_data(state: &AppState, realm: Realm) -> anyhow::Result<(
     }
 
     dbg!("Database up to date");
-    anyhow::Ok(())
+    Ok(UpdateOutcome::Success)
 }
 
 fn map_items(original_map: &HashMap<String, GGGBaseItem>) -> HashMap<String, String> {
@@ -159,7 +159,7 @@ pub async fn clean_raw_responses(
 }
 
 /// Run the whole ELT pipeline on new data
-pub async fn update_and_run_elt(state: &AppState, realm: Realm) -> anyhow::Result<()> {
+pub async fn update_and_run_elt(state: &AppState, realm: Realm) -> anyhow::Result<UpdateOutcome> {
     get_update_data(state, realm).await?;
 
     {
@@ -196,7 +196,7 @@ pub async fn update_and_run_elt(state: &AppState, realm: Realm) -> anyhow::Resul
 
     // dbg!("Cleaning data for {}", &active_leagues);
     clean_raw_responses(state, realm, &active_leagues).await?;
-    Ok(())
+    Ok(UpdateOutcome::Success)
 }
 
 #[cfg(test)]
@@ -224,7 +224,7 @@ mod test {
     #[test]
     fn test_map_items() {
         let item = GGGBaseItem {
-            name: "Exalted Orb".to_string(),
+            name: Some("Exalted Orb".to_string()),
             ..Default::default()
         };
 
