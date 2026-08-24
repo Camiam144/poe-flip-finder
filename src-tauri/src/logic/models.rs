@@ -36,10 +36,7 @@ impl fmt::Display for TradingCurrencyType {
 
 impl TradingCurrencyType {
     pub fn is_hub(&self) -> bool {
-        match self {
-            Self::Other(_) => false,
-            _ => true,
-        }
+        !matches!(self, Self::Other(_))
     }
 }
 

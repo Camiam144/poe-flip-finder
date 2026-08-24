@@ -3,72 +3,49 @@ use crate::models::api_models::ExchangeRecord;
 use models::{TradingCurrencyRates, TradingCurrencyType};
 use std::collections::HashMap;
 
-/// Get the average price of each actual trading currency
+fn exchange_rate(
+    market: &models::Market,
+    from: TradingCurrencyType,
+    to: TradingCurrencyType,
+) -> Option<f64> {
+    let vol_a = market.volume_traded_currency_a as f64;
+    let vol_b = market.volume_traded_currency_b as f64;
+
+    match (&market.currency_a, &market.currency_b) {
+        (a, b) if *a == from && *b == to => Some(vol_b / vol_a),
+        (a, b) if *a == to && *b == from => Some(vol_a / vol_b),
+        _ => None,
+    }
+}
+
+/// Get the average price of each actual trading currency.
+/// These volumes should be high enough that there is basically zero inefficiency.
 pub fn get_base_prices(markets: &[models::Market]) -> TradingCurrencyRates {
     let mut rates = TradingCurrencyRates::default();
 
-    let rate_markets: Vec<&models::Market> =
-        markets.iter().filter(|m| m.is_trading_rate()).collect();
-
-    // dbg!(&rate_markets);
-
     for market in markets.iter().filter(|m| m.is_trading_rate()) {
-        match (&market.currency_a, &market.currency_b) {
-            (TradingCurrencyType::Divine, TradingCurrencyType::Exalt)
-            | (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => {
-                // dbg!(&market.currency_a);
-                // dbg!(&market.currency_b);
-                // dbg!(&market.volume_traded);
-                // dbg!(&market.highest_ratio);
-                // dbg!(&market.lowest_ratio);
-                if market.currency_a == TradingCurrencyType::Exalt {
-                    rates.div_to_exalt = market.volume_traded_currency_a as f64
-                        / market.volume_traded_currency_b as f64;
-                } else {
-                    rates.div_to_exalt = market.volume_traded_currency_b as f64
-                        / market.volume_traded_currency_a as f64;
-                }
-            }
-            (TradingCurrencyType::Divine, TradingCurrencyType::Chaos)
-            | (TradingCurrencyType::Chaos, TradingCurrencyType::Divine) => {
-                // dbg!(&market.currency_a);
-                // dbg!(&market.currency_b);
-                // dbg!(&market.volume_traded);
-                // dbg!(&market.highest_ratio);
-                // dbg!(&market.lowest_ratio);
-                if market.currency_a == TradingCurrencyType::Chaos {
-                    rates.div_to_chaos = market.volume_traded_currency_a as f64
-                        / market.volume_traded_currency_b as f64;
-                } else {
-                    rates.div_to_chaos = market.volume_traded_currency_b as f64
-                        / market.volume_traded_currency_a as f64;
-                }
-            }
-            (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt)
-            | (TradingCurrencyType::Exalt, TradingCurrencyType::Chaos) => {
-                // dbg!(&market.currency_a);
-                // dbg!(&market.currency_b);
-                // dbg!(&market.volume_traded);
-                // dbg!(&market.highest_ratio);
-                // dbg!(&market.lowest_ratio);
-                if market.currency_a == TradingCurrencyType::Exalt {
-                    rates.chaos_to_exalt = market.volume_traded_currency_a as f64
-                        / market.volume_traded_currency_b as f64;
-                } else {
-                    rates.chaos_to_exalt = market.volume_traded_currency_b as f64
-                        / market.volume_traded_currency_a as f64;
-                }
-            }
-            (_, _) => {}
+        if let Some(rate) = exchange_rate(
+            market,
+            TradingCurrencyType::Divine,
+            TradingCurrencyType::Exalt,
+        ) {
+            rates.div_to_exalt = rate;
+        } else if let Some(rate) = exchange_rate(
+            market,
+            TradingCurrencyType::Divine,
+            TradingCurrencyType::Chaos,
+        ) {
+            rates.div_to_chaos = rate;
+        } else if let Some(rate) = exchange_rate(
+            market,
+            TradingCurrencyType::Chaos,
+            TradingCurrencyType::Exalt,
+        ) {
+            rates.chaos_to_exalt = rate;
         }
     }
     rates
 }
-
-/// Build a set of valid bridges that we can trade between.
-// pub fn calculate_(markets: &[Market]) {
-//     let bridges: Vec<&Market> = markets.iter().filter(|m| m.is_valid_bridge()).collect();
-// }
 
 type HubToBridge = HashMap<(TradingCurrencyType, String), f64>;
 type BridgeToHub = HashMap<(String, TradingCurrencyType), f64>;

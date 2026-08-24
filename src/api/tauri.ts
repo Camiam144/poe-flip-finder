@@ -7,6 +7,7 @@ import type {
   RawLeagueApiResponse,
   Realm,
   TradingCurrencyRates,
+  UpdateOutcome,
 } from "../types/game";
 
 export function isFrontendError(err: unknown): err is FrontendError {
@@ -46,9 +47,10 @@ export async function fetchLastRefresh(realmId: Realm): Promise<string> {
   return lastRefreshTime;
 }
 
-export async function updateDatabase(realmId: Realm): Promise<string> {
-  const updateDataResult = await invoke<string>("update_database", {
+export async function updateDatabase(realmId: Realm): Promise<UpdateOutcome> {
+  const updateDataResult = await invoke<UpdateOutcome>("update_database", {
     realm: realmId,
   });
+
   return updateDataResult;
 }

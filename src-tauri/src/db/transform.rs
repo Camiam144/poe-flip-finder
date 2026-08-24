@@ -5,7 +5,7 @@
 use crate::{
     db::models::{DbRow, ParsedDbRow},
     ggg_api::models::{GGGLeague, RawCxApiResponse, RawMarket},
-    models::logic_models::TradingCurrencyType,
+    logic::models::TradingCurrencyType,
 };
 use anyhow::{anyhow, Result};
 use std::{collections::HashMap, str::FromStr};

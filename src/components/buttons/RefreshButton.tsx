@@ -19,7 +19,7 @@ export function RefreshButton() {
     setIsRunning(true);
     updateDatabase(realmId)
       .then((data) => {
-        if (data !== "success") {
+        if (data !== "Success" && data !== "NoUpdateNeeded") {
           throw new Error("Refresh did not succeed.");
         }
       })

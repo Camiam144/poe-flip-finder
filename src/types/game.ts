@@ -24,3 +24,5 @@ export interface TradingCurrencyRates {
   div_to_chaos: number;
   chaos_to_exalt: number;
 }
+
+export type UpdateOutcome = "Success" | "NoUpdateNeeded";
