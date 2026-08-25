@@ -39,7 +39,7 @@ impl DbClient {
     pub async fn insert_data(
         &self,
         change_id: i64,
-        realm: Realm,
+        realm: &Realm,
         payload: &str,
     ) -> Result<(), sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
@@ -62,7 +62,7 @@ impl DbClient {
     pub async fn get_specific_change_id(
         &self,
         change_id: i64,
-        realm: Realm,
+        realm: &Realm,
     ) -> Result<Option<DbRow>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
@@ -83,7 +83,7 @@ impl DbClient {
     /// Get up to 500 unprocessed payloads for a given realm, limited to 500 values for
     /// memory issues, may need to run multiple times if it's been weeks/months since
     /// last update (24 points per day).
-    pub async fn get_unprocessed_rows(&self, realm: Realm) -> Result<Vec<DbRow>, sqlx::Error> {
+    pub async fn get_unprocessed_rows(&self, realm: &Realm) -> Result<Vec<DbRow>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
         let results: Vec<DbRow> = query_as(
@@ -103,7 +103,7 @@ impl DbClient {
     pub async fn mark_record_as_processed(
         &self,
         change_id: i64,
-        realm: Realm,
+        realm: &Realm,
     ) -> Result<(), sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
@@ -124,7 +124,7 @@ impl DbClient {
     pub async fn insert_processed_row(
         &self,
         parsed_row: &ParsedDbRow,
-        realm: Realm,
+        realm: &Realm,
     ) -> Result<(), sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
@@ -185,7 +185,7 @@ impl DbClient {
     pub async fn insert_multiple_processed_rows(
         &self,
         processed_rows: &[ParsedDbRow],
-        realm: Realm,
+        realm: &Realm,
     ) -> Result<(), sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
         let table = get_table_name(realm);
@@ -251,7 +251,7 @@ impl DbClient {
     }
 
     /// Retrieve the single most recent raw entry for the given game version
-    pub async fn get_latest_raw(&self, realm: Realm) -> Result<Option<DbRow>, sqlx::Error> {
+    pub async fn get_latest_raw(&self, realm: &Realm) -> Result<Option<DbRow>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
         let results: Option<DbRow> = query_as(
@@ -271,7 +271,7 @@ impl DbClient {
     pub async fn get_parsed_marketplace(
         &self,
         change_id: i64,
-        realm: Realm,
+        realm: &Realm,
         league_id: &str,
     ) -> Result<Vec<ParsedDbRow>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
@@ -293,7 +293,7 @@ impl DbClient {
     /// Retrieve the latest parsed data for a given realm and league
     pub async fn get_latest_parsed_marketplace(
         &self,
-        realm: Realm,
+        realm: &Realm,
         league_id: &str,
     ) -> Result<Vec<ParsedDbRow>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
@@ -330,7 +330,7 @@ impl DbClient {
         Ok(())
     }
 }
-fn get_table_name(realm: Realm) -> String {
+fn get_table_name(realm: &Realm) -> String {
     match realm {
         Realm::Poe1 => "poe1_markets".to_string(),
         Realm::Poe2 => "poe2_markets".to_string(),
@@ -366,7 +366,7 @@ mod tests {
             .expect("Should have created in-memory db");
 
         let res = client
-            .insert_data(12345, Realm::Poe2, "{item : chaos_orb}")
+            .insert_data(12345, &Realm::Poe2, "{item : chaos_orb}")
             .await;
         println!("res is {:?}", res);
         assert!(res.is_ok());
@@ -377,7 +377,7 @@ mod tests {
         let client = DbClient::try_in_memory()
             .await
             .expect("Should have created in-memory db");
-        let res = client.get_latest_raw(Realm::Poe1).await;
+        let res = client.get_latest_raw(&Realm::Poe1).await;
         assert!(res.is_ok_and(|x| x.is_none()));
     }
 
@@ -388,10 +388,10 @@ mod tests {
             .expect("Should have created in-memory db");
 
         client
-            .insert_data(12345, Realm::Poe1, "{}")
+            .insert_data(12345, &Realm::Poe1, "{}")
             .await
             .expect("Should have inserted row");
-        let latest = client.get_latest_raw(Realm::Poe1).await;
+        let latest = client.get_latest_raw(&Realm::Poe1).await;
         let expected = DbRow {
             change_id: 12345,
             id: 1,
@@ -409,15 +409,15 @@ mod tests {
             .await
             .expect("Should have created in-memory db");
         client
-            .insert_data(12345, Realm::Poe1, "{}")
+            .insert_data(12345, &Realm::Poe1, "{}")
             .await
             .expect("Should have been able to do first insert");
         client
-            .insert_data(12346, Realm::Poe1, "{}")
+            .insert_data(12346, &Realm::Poe1, "{}")
             .await
             .expect("Should have been able to do second insert");
 
-        let res = client.get_specific_change_id(12346, Realm::Poe1).await;
+        let res = client.get_specific_change_id(12346, &Realm::Poe1).await;
         let expected = DbRow {
             id: 2,
             change_id: 12346,
@@ -430,31 +430,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_mark_record_as_processed() {
+        let client = DbClient::try_in_memory()
+            .await
+            .expect("Should have created in-memory db");
+
+        client
+            .insert_data(12345, &Realm::Poe1, "{}")
+            .await
+            .expect("Should have been able to do first insert");
+
+        client
+            .mark_record_as_processed(12345, &Realm::Poe1)
+            .await
+            .expect("Should have been able to mark record");
+
+        let row = client
+            .get_specific_change_id(12345, &Realm::Poe1)
+            .await
+            .expect("Should have retrieved value");
+        assert!(row.is_some_and(|r| r.parsed_bool == 1));
+    }
+
+    #[tokio::test]
     async fn test_delete_old_entries() {
         let client = DbClient::try_in_memory()
             .await
             .expect("Should have created in-memory db");
         client
-            .insert_data(12345, Realm::Poe1, "{}")
+            .insert_data(12345, &Realm::Poe1, "{}")
             .await
             .expect("Should have been able to do first insert");
         client
-            .insert_data(12346, Realm::Poe1, "{}")
+            .insert_data(12346, &Realm::Poe1, "{}")
             .await
             .expect("Should have been able to do second insert");
 
         client
-            .mark_record_as_processed(12345, Realm::Poe1)
+            .mark_record_as_processed(12345, &Realm::Poe1)
             .await
             .expect("Should have been able to mark record.");
 
         let del = client.delete_old_entries(12346).await;
         assert!(del.is_ok());
 
-        let missing = client.get_specific_change_id(12345, Realm::Poe1).await;
+        let missing = client.get_specific_change_id(12345, &Realm::Poe1).await;
         assert!(missing.is_ok_and(|m| m.is_none()));
 
-        let res = client.get_specific_change_id(12346, Realm::Poe1).await;
+        let res = client.get_specific_change_id(12346, &Realm::Poe1).await;
         let expected = DbRow {
             id: 2,
             change_id: 12346,
@@ -464,29 +487,6 @@ mod tests {
         };
         // println!("result {:?}", res);
         assert!(res.is_ok_and(|f| f.is_some_and(|v| v == expected)));
-    }
-
-    #[tokio::test]
-    async fn test_mark_record_as_processed() {
-        let client = DbClient::try_in_memory()
-            .await
-            .expect("Should have created in-memory db");
-
-        client
-            .insert_data(12345, Realm::Poe1, "{}")
-            .await
-            .expect("Should have been able to do first insert");
-
-        client
-            .mark_record_as_processed(12345, Realm::Poe1)
-            .await
-            .expect("Should have been able to mark record");
-
-        let row = client
-            .get_specific_change_id(12345, Realm::Poe1)
-            .await
-            .expect("Should have retrieved value");
-        assert!(row.is_some_and(|r| r.parsed_bool == 1));
     }
 
     #[tokio::test]
@@ -510,12 +510,12 @@ mod tests {
         expected.id = Some(1);
 
         client
-            .insert_processed_row(&data, Realm::Poe2)
+            .insert_processed_row(&data, &Realm::Poe2)
             .await
             .expect("Should have been able to insert");
 
         let result = client
-            .get_parsed_marketplace(12345, Realm::Poe2, "Test")
+            .get_parsed_marketplace(12345, &Realm::Poe2, "Test")
             .await
             .expect("Should have been able to query db");
 
@@ -542,7 +542,7 @@ mod tests {
             .collect();
 
         client
-            .insert_multiple_processed_rows(&data, Realm::Poe2)
+            .insert_multiple_processed_rows(&data, &Realm::Poe2)
             .await
             .expect("Should have entered multiple rows");
 
@@ -552,12 +552,12 @@ mod tests {
         expected_last.id = Some(3);
 
         let result_first = client
-            .get_parsed_marketplace(0, Realm::Poe2, "Test")
+            .get_parsed_marketplace(0, &Realm::Poe2, "Test")
             .await
             .expect("Should have been able to query");
 
         let result_last = client
-            .get_parsed_marketplace(2, Realm::Poe2, "Test")
+            .get_parsed_marketplace(2, &Realm::Poe2, "Test")
             .await
             .expect("Should have been able to query");
 

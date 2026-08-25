@@ -6,11 +6,10 @@ pub mod errors;
 pub mod ggg_api;
 pub mod logic;
 pub mod models;
+pub mod services;
 pub mod sync;
 
-use chrono::{DateTime, Local};
 use std::env;
-use std::str::FromStr;
 use std::sync::Mutex;
 use tauri::{Manager, State};
 
@@ -18,8 +17,12 @@ use crate::db::models::UpdateOutcome;
 use crate::db::DbClient;
 use crate::errors::FrontendError;
 use crate::ggg_api::client::{build_http_client, ApiClient};
-use crate::ggg_api::models::{RawLeagueApiResponse, Realm};
+use crate::ggg_api::models::RawLeagueApiResponse;
 use crate::logic::models::TradingCurrencyRates;
+use crate::services::{
+    handle_current_leagues, handle_get_rates, handle_most_recent_update_time,
+    handle_update_database,
+};
 
 #[tauri::command(async)]
 async fn get_leagues(
@@ -27,73 +30,15 @@ async fn get_leagues(
     realm: String,
 ) -> Result<RawLeagueApiResponse, FrontendError> {
     // let state = state;
-    let api_realm: Realm = if let Ok(val) = Realm::from_str(&realm) {
-        val
-    } else {
-        return Err(FrontendError::Other {
-            message: "Invalid Realm Provided".to_string(),
-        });
-    };
-    {
-        let cached_leagues = state.league_cache.lock().unwrap();
-
-        let maybe_cache = match api_realm {
-            Realm::Poe1 => cached_leagues[0].as_ref(),
-            Realm::Poe2 => cached_leagues[1].as_ref(),
-        };
-
-        if let Some(cached) = maybe_cache {
-            dbg!("Pulling leagues from cache");
-            return Ok(cached.clone());
-        }
-    }
-
-    // Didn't have a cached value, store the new value
-    let leagues = ggg_api::get_leagues_from_ggg(&state, api_realm)
-        .await
-        .map_err(FrontendError::from)?;
-
-    {
-        let mut cached_leagues = state.league_cache.lock().unwrap();
-
-        // dbg!("Caching leagues for {}", api_realm.to_string());
-
-        match api_realm {
-            Realm::Poe1 => cached_leagues[0] = Some(leagues.clone()),
-            Realm::Poe2 => cached_leagues[1] = Some(leagues.clone()),
-        };
-    }
-
-    Ok(leagues)
+    handle_current_leagues(&state, &realm).await
 }
 
 #[tauri::command(async)]
 async fn get_most_recent_update_time(
     state: State<'_, AppState>,
     realm: String,
-) -> Result<String, String> {
-    let api_realm: Realm = if let Ok(val) = Realm::from_str(&realm) {
-        val
-    } else {
-        return Err("Invalid Realm Provided".to_string());
-    };
-
-    let most_recent = state
-        .db_client
-        .get_latest_raw(api_realm)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if let Some(val) = most_recent {
-        let time = val.change_id;
-        let local_time: DateTime<Local> = DateTime::from_timestamp_secs(time)
-            .expect("Invalid timestamp")
-            .with_timezone(&Local);
-        // dbg!(local_time);
-        Ok(local_time.to_string())
-    } else {
-        Err(format!("No entry for realm {}", realm))
-    }
+) -> Result<String, FrontendError> {
+    handle_most_recent_update_time(&state, &realm).await
 }
 
 #[tauri::command(async)]
@@ -102,39 +47,7 @@ async fn get_rates(
     realm: String,
     league: String,
 ) -> Result<TradingCurrencyRates, FrontendError> {
-    let api_realm: Realm = if let Ok(val) = Realm::from_str(&realm) {
-        val
-    } else {
-        return Err(FrontendError::InvalidInput {
-            message: "Invalid Realm Provided".to_string(),
-        });
-    };
-    let most_recent = state
-        .db_client
-        .get_latest_parsed_marketplace(api_realm, &league)
-        .await
-        .map_err(|e| FrontendError::Database {
-            message: e.to_string(),
-        })?;
-
-    if most_recent.is_empty() {
-        return Err(FrontendError::Database {
-            message: format!("No most recent entry for {} and {}", api_realm, league),
-        });
-    }
-
-    // TODO: This should probably be cached in a kv cache in app state, like the
-    // leagues are in a vector.
-    let all_markets: Vec<logic::models::Market> = most_recent
-        .iter()
-        .map(logic::models::Market::from)
-        .collect();
-
-    // dbg!("num markets {}", &all_markets.len());
-
-    let rates = logic::get_base_prices(&all_markets);
-    // dbg!(&rates);
-    Ok(rates)
+    handle_get_rates(&state, &realm, &league).await
 }
 
 #[tauri::command(async)]
@@ -142,22 +55,7 @@ async fn update_database(
     state: State<'_, AppState>,
     realm: String,
 ) -> Result<UpdateOutcome, FrontendError> {
-    dbg!("Updating Data".to_string());
-    let api_realm: Realm = if let Ok(val) = Realm::from_str(&realm) {
-        val
-    } else {
-        return Err(FrontendError::InvalidInput {
-            message: ("Invalid Realm Provided".to_string()),
-        });
-    };
-
-    let update_result = sync::update_and_run_elt(&state, api_realm)
-        .await
-        .map_err(|e| FrontendError::Database {
-            message: (e.to_string()),
-        })?;
-
-    Ok(update_result)
+    handle_update_database(&state, &realm).await
 }
 
 pub struct AppState {

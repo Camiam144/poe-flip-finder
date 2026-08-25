@@ -11,7 +11,7 @@ use crate::ggg_api::get_specified_cxapi_from_ggg;
 use crate::ggg_api::models::{GGGLeague, Realm};
 use crate::AppState;
 
-async fn fetch_and_save_hour(state: &AppState, realm: Realm, change_id: i64) -> Result<()> {
+async fn fetch_and_save_hour(state: &AppState, realm: &Realm, change_id: i64) -> Result<()> {
     dbg!(format!("Pulling data for {}", &change_id));
     let ggg_response = get_specified_cxapi_from_ggg(&state.http_client, realm, change_id).await?;
     let ggg_response_text = serde_json::to_string(&ggg_response)?;
@@ -44,7 +44,7 @@ fn list_hrs_between(start: i64, end: i64) -> Vec<i64> {
 
 /// Update the database from the most recent recorded timestamp to the most recent available hour
 /// Use timers to avoid getting rate limited
-pub async fn get_update_data(state: &AppState, realm: Realm) -> anyhow::Result<UpdateOutcome> {
+pub async fn get_update_data(state: &AppState, realm: &Realm) -> anyhow::Result<UpdateOutcome> {
     //TODO: Better error handling
     let past_hour = previous_hour_change_id()?;
     dbg!(format!("Most recent hour should be {}", past_hour));
@@ -97,7 +97,7 @@ fn map_items(original_map: &HashMap<String, GGGBaseItem>) -> HashMap<String, Str
         .collect::<HashMap<String, String>>()
 }
 
-async fn load_item_mappings(realm: Realm) -> Result<HashMap<String, String>> {
+async fn load_item_mappings(realm: &Realm) -> Result<HashMap<String, String>> {
     // TODO: These shouldn't be hardcoded eventually.
     let filepath = match realm {
         Realm::Poe1 => Path::new("./data/base_items.min.json"),
@@ -114,7 +114,7 @@ async fn load_item_mappings(realm: Realm) -> Result<HashMap<String, String>> {
 
 pub async fn clean_raw_responses(
     state: &AppState,
-    realm: Realm,
+    realm: &Realm,
     leagues: &[GGGLeague],
 ) -> anyhow::Result<()> {
     // This needs to determine which leagues we're going to filter, then load
@@ -159,7 +159,7 @@ pub async fn clean_raw_responses(
 }
 
 /// Run the whole ELT pipeline on new data
-pub async fn update_and_run_elt(state: &AppState, realm: Realm) -> anyhow::Result<UpdateOutcome> {
+pub async fn update_and_run_elt(state: &AppState, realm: &Realm) -> anyhow::Result<UpdateOutcome> {
     get_update_data(state, realm).await?;
 
     {

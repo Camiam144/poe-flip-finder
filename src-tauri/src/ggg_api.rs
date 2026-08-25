@@ -12,7 +12,7 @@ use models::{RawCxApiResponse, RawLeagueApiResponse, Realm};
 /// Make a call to GGG's CXAPI to get an entry
 pub async fn get_specified_cxapi_from_ggg(
     client: &ApiClient,
-    realm: Realm,
+    realm: &Realm,
     time: i64,
 ) -> anyhow::Result<RawCxApiResponse> {
     let base_url = "https://api.pathofexile.com/currency-exchange/";
@@ -49,11 +49,11 @@ pub async fn get_specified_cxapi_from_ggg(
 /// updated as needed instead of pinging it every time.
 pub async fn get_leagues_from_ggg(
     state: &AppState,
-    realm: Realm,
+    realm: &Realm,
 ) -> Result<RawLeagueApiResponse, GGGApiError> {
     // TODO: Cache these somewhere, check once per day? Once per session?
     let url = "https://api.pathofexile.com/league";
-    let realm = if realm == Realm::Poe1 {
+    let realm = if *realm == Realm::Poe1 {
         "pc"
     } else {
         &realm.to_string().to_lowercase()
