@@ -48,6 +48,18 @@ function TradingRates({
     );
   }
 
+  if (error?.kind === "database") {
+    return (
+      <tbody>
+        <tr>
+          <td>
+            {error.message}
+          </td>
+        </tr>
+      </tbody>
+    )
+  }
+
   return (
     <>
       {!isLoading ? (

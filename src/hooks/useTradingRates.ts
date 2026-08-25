@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { League, Realm, TradingCurrencyRates } from "../types/game";
+import { FrontendError, League, Realm, TradingCurrencyRates } from "../types/game";
 import { fetchTradingCurrencyRates } from "../api/tauri";
 
 interface TradingCurrencyResult {
   tradingRates: TradingCurrencyRates;
   isLoading: boolean;
-  error: string | null;
+  error: FrontendError | null;
 }
 
 // Since we make this depend on the realmId & leagueID, this will rerun whenever that ID changes
@@ -20,7 +20,7 @@ export function useTradingCurrencyRates(
     chaos_to_exalt: 0,
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FrontendError | null>(null);
 
   useEffect(() => {
     if (!realmId || !leagueId) {
@@ -39,7 +39,7 @@ export function useTradingCurrencyRates(
       .catch((err) => {
         if (!cancelled) {
           console.log(err);
-          setError(String(err));
+          setError(err);
         }
       })
       .finally(() => {

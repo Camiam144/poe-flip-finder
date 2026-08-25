@@ -7,7 +7,10 @@ export interface RawLeagueApiResponse {
 export type FrontendError =
   | { kind: "network"; message: string }
   | { kind: "parse"; message: string }
-  | { kind: "api"; code: number; message: string };
+  | { kind: "api"; code: number; message: string }
+  | { kind: "database"; message: string }
+  | { kind: "invalidInput";  message: string }
+  | { kind: "other"; message: string };
 
 export interface League {
   id: string;
