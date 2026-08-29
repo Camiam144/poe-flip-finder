@@ -1,4 +1,4 @@
-use std::{convert::Infallible, fmt, str::FromStr};
+use std::{collections::HashMap, convert::Infallible, fmt, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 
@@ -108,6 +108,37 @@ impl Market {
     pub fn is_trading_rate(&self) -> bool {
         self.is_hub_curr_a && self.is_hub_curr_b
     }
+    pub fn get_lowest_ratio(&self) -> Option<f64> {
+        if self.lowest_ratio_currency_b == 0 {
+            return None;
+        }
+        Some(self.lowest_ratio_currency_a as f64 / self.lowest_ratio_currency_b as f64)
+    }
+    pub fn get_highest_ratio(&self) -> Option<f64> {
+        if self.highest_ratio_currency_b == 0 {
+            return None;
+        }
+        Some(self.highest_ratio_currency_a as f64 / self.highest_ratio_currency_b as f64)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TradingEdge {
+    pub from_currency: TradingCurrencyType,
+    pub to_currency: TradingCurrencyType,
+    pub lowest_ratio: f64,
+    pub highest_ratio: f64,
+    pub volume: i64,
+}
+
+pub type Graph = HashMap<TradingCurrencyType, Vec<TradingEdge>>;
+
+#[derive(Debug, Clone)]
+pub struct ArbitrageOpportunity {
+    pub path: Vec<TradingCurrencyType>,
+    pub high_ratios: Vec<f64>,
+    pub low_ratios: Vec<f64>,
+    pub volumes: Vec<i64>,
 }
 
 #[cfg(test)]
