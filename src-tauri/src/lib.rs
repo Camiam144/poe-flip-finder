@@ -5,7 +5,6 @@ pub mod db;
 pub mod errors;
 pub mod ggg_api;
 pub mod logic;
-pub mod models;
 pub mod services;
 pub mod sync;
 
@@ -18,10 +17,10 @@ use crate::db::DbClient;
 use crate::errors::FrontendError;
 use crate::ggg_api::client::{build_http_client, ApiClient};
 use crate::ggg_api::models::RawLeagueApiResponse;
-use crate::logic::models::TradingCurrencyRates;
+use crate::logic::models::{ArbitrageOpportunity, TradingCurrencyRates};
 use crate::services::{
-    handle_current_leagues, handle_get_rates, handle_most_recent_update_time,
-    handle_update_database,
+    handle_current_leagues, handle_get_opportunities, handle_get_rates,
+    handle_most_recent_update_time, handle_update_database,
 };
 
 #[tauri::command(async)]
@@ -56,6 +55,15 @@ async fn update_database(
     realm: String,
 ) -> Result<UpdateOutcome, FrontendError> {
     handle_update_database(&state, &realm).await
+}
+
+#[tauri::command(async)]
+async fn get_arbitrage(
+    state: State<'_, AppState>,
+    realm: String,
+    league: String,
+) -> Result<Vec<ArbitrageOpportunity>, FrontendError> {
+    handle_get_opportunities(&state, &realm, &league).await
 }
 
 pub struct AppState {
@@ -93,6 +101,7 @@ pub fn run() {
             get_rates,
             get_most_recent_update_time,
             update_database,
+            get_arbitrage,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

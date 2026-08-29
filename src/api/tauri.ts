@@ -8,6 +8,7 @@ import type {
   Realm,
   TradingCurrencyRates,
   UpdateOutcome,
+  ArbitrageOpportunity
 } from "../types/game";
 
 export function isFrontendError(err: unknown): err is FrontendError {
@@ -51,6 +52,12 @@ export async function updateDatabase(realmId: Realm): Promise<UpdateOutcome> {
   const updateDataResult = await invoke<UpdateOutcome>("update_database", {
     realm: realmId,
   });
-
   return updateDataResult;
+}
+
+export async function fetchArbitrage(realmId: Realm, leagueId: string): Promise<ArbitrageOpportunity[]> {
+  const fetchArbitrageResult = await invoke<ArbitrageOpportunity[]>("get_arbitrage", {
+    realm: realmId, league: leagueId
+  });
+  return fetchArbitrageResult
 }

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::db::models::ParsedDbRow;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+#[serde(tag = "type", content = "name")]
 pub enum TradingCurrencyType {
     Other(String),
     Exalt,
@@ -133,7 +134,7 @@ pub struct TradingEdge {
 
 pub type Graph = HashMap<TradingCurrencyType, Vec<TradingEdge>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArbitrageOpportunity {
     pub path: Vec<TradingCurrencyType>,
     pub high_ratios: Vec<f64>,

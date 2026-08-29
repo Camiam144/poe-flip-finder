@@ -8,13 +8,13 @@ use crate::{
         models::{RawLeagueApiResponse, Realm},
     },
     logic::{
-        self,
-        models::{Market, TradingCurrencyRates},
+        self, build_and_populate_graph, get_all_arbitrage_options,
+        models::{ArbitrageOpportunity, Market, TradingCurrencyRates},
     },
     sync, AppState,
 };
 
-fn get_cached_leagues(state: &AppState, realm: Realm) -> Option<RawLeagueApiResponse> {
+fn get_cached_leagues(state: &AppState, realm: &Realm) -> Option<RawLeagueApiResponse> {
     let cached_leagues = state.league_cache.lock().unwrap();
 
     match realm {
@@ -23,7 +23,7 @@ fn get_cached_leagues(state: &AppState, realm: Realm) -> Option<RawLeagueApiResp
     }
 }
 
-fn cache_leagues(state: &AppState, realm: Realm, leagues: &RawLeagueApiResponse) {
+fn cache_leagues(state: &AppState, realm: &Realm, leagues: &RawLeagueApiResponse) {
     let mut cached_leagues = state.league_cache.lock().unwrap();
 
     // dbg!("Caching leagues for {}", api_realm.to_string());
@@ -39,14 +39,14 @@ fn parse_realm(realm: &str) -> Result<Realm, FrontendError> {
         .map_err(|e| FrontendError::InvalidInput { message: e })
 }
 
+/// Get the active leagues for a realm and cache them if they aren't cached.
 pub async fn handle_current_leagues(
     state: &AppState,
     realm: &str,
 ) -> Result<RawLeagueApiResponse, FrontendError> {
     let api_realm = parse_realm(realm)?;
-    let maybe_cached = get_cached_leagues(state, api_realm);
 
-    let leagues = if let Some(val) = maybe_cached {
+    let leagues = if let Some(val) = get_cached_leagues(state, &api_realm) {
         val
     } else {
         // Didn't have a cached value, store the new value
@@ -54,7 +54,7 @@ pub async fn handle_current_leagues(
             .await
             .map_err(FrontendError::from)?;
 
-        cache_leagues(state, api_realm, &new_leagues);
+        cache_leagues(state, &api_realm, &new_leagues);
         new_leagues
     };
 
@@ -117,6 +117,10 @@ pub async fn handle_get_rates(
 
     // dbg!("num markets {}", &all_markets.len());
 
+    // This also should be in a kv cache. Could be as simple as a cache that has
+    // like <(realm, league, timestamp), (Vec<Market>, TCR)> and if the key doesn't exist
+    // then I have to go pull. Or a struct that holds the markets, TCR, Graph, and
+    // all of that stuff for a given realm, league and timestamp.
     let rates = logic::get_base_prices(&all_markets);
     // dbg!(&rates);
     Ok(rates)
@@ -136,4 +140,40 @@ pub async fn handle_update_database(
         })?;
 
     Ok(update_result)
+}
+
+/// Get all of the opportunities available. We're going to rebuild the market list
+/// here but the current leagues could be cached in the app state and then rebuilt
+/// whenever the database update fires.
+pub async fn handle_get_opportunities(
+    state: &AppState,
+    realm: &str,
+    league: &str,
+) -> Result<Vec<ArbitrageOpportunity>, FrontendError> {
+    // TODO: Stopgap for now of just pulling most recent. Eventually I will want
+    // to pull the past N steps and see what has been inefficient during that
+    // whole time.
+    //
+    // All of this is copied code. Also I need to parse the realm on intake.
+    let api_realm = parse_realm(realm)?;
+
+    let most_recent = state
+        .db_client
+        .get_latest_parsed_marketplace(&api_realm, league)
+        .await
+        .map_err(|e| FrontendError::Database {
+            message: e.to_string(),
+        })?;
+
+    if most_recent.is_empty() {
+        return Err(FrontendError::Database {
+            message: format!("No most recent entry for {} and {}", api_realm, league),
+        });
+    }
+    let all_markets: Vec<Market> = most_recent.iter().map(Market::from).collect();
+
+    let graph = build_and_populate_graph(&all_markets);
+    // This is hardcoded for now but will eventually be a parameter from the frontend.
+    let max_depth: usize = 3;
+    Ok(get_all_arbitrage_options(&graph, max_depth))
 }
