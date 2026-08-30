@@ -100,13 +100,11 @@ pub fn market_graph_dfs(
     start_hub: &TradingCurrencyType,
     max_depth: usize,
 ) -> Vec<Vec<TradingCurrencyType>> {
-    // TODO: Should be able to rewrite this with a lot less cloning and instead
-    // references to many (all?) of these values.
-    let mut opportunities = Vec::new();
-    let mut stack = Vec::new();
+    let mut opportunities: Vec<Vec<&TradingCurrencyType>> = Vec::new();
+    let mut stack: Vec<(&TradingCurrencyType, Vec<&TradingCurrencyType>)> = Vec::new();
     // We're going to use the tuple (TCT, Vec<TCT>) to track where we are
     // By re-traversing the given TCTs we can build the arbitrage path
-    stack.push((start_hub.clone(), Vec::<TradingCurrencyType>::new()));
+    stack.push((start_hub, Vec::<&TradingCurrencyType>::new()));
 
     let hubs = [
         TradingCurrencyType::Divine,
@@ -115,44 +113,43 @@ pub fn market_graph_dfs(
     ];
 
     while let Some((current_vertex, mut current_path)) = stack.pop() {
-        let current_edges = graph.get(&current_vertex);
+        let Some(current_edges) = graph.get(current_vertex) else {
+            continue;
+        };
 
         // if we're not on a hub and we've seen this vertex before or there's some
         // issue with the edges, we skip
-        if !hubs.contains(&current_vertex)
-            && (current_path.contains(&current_vertex)
-                || current_edges.is_none_or(|e| e.is_empty()))
+        if !hubs.contains(current_vertex)
+            && (current_path.contains(&current_vertex) || current_edges.is_empty())
         {
             continue;
         }
 
         // We have something, stick it on the path
-        current_path.push(current_vertex.clone());
+        current_path.push(current_vertex);
+
+        // If we're too deep, we bail and move on to the next option
+        if current_path.len() > max_depth {
+            continue;
+        }
 
         // If we have depth less than or equal to max_depth and we landed
-        // on a differe hub currency, we may have an arbitrage opportunity.
+        // on a different hub currency, we may have an arbitrage opportunity.
         // We can land on any other hub currency as the prices between them are (generally)
         // very stable.
         if current_path.len() <= max_depth
             && current_path.len() > 1
-            && current_vertex != *start_hub
-            && hubs.contains(&current_vertex)
+            && current_vertex != start_hub
+            && hubs.contains(current_vertex)
         {
-            opportunities.push(current_path.clone());
+            opportunities.push(current_path.clone())
         }
-        // If we're too deep, we bail
-        if current_path.len() >= max_depth {
-            continue;
-        }
+
         // Next we have to go through all of the edges and put their connected
         // vertices on the stack, `to_currency` is the currency we're going to
         // next.
-        // Safety: We already checked if current_edges is not None or empty
-        let vertices: Vec<TradingCurrencyType> = current_edges
-            .unwrap()
-            .iter()
-            .map(|e| e.to_currency.clone())
-            .collect();
+        let vertices: Vec<&TradingCurrencyType> =
+            current_edges.iter().map(|e| &e.to_currency).collect();
 
         for v in vertices {
             stack.push((v, current_path.clone()));
@@ -160,6 +157,9 @@ pub fn market_graph_dfs(
     }
 
     opportunities
+        .into_iter()
+        .map(|inner| inner.into_iter().cloned().collect())
+        .collect()
 }
 
 /// Calculate the return for a potential opportunity in the market
