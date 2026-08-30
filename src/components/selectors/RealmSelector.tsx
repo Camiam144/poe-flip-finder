@@ -7,10 +7,10 @@ import { Realm } from "../../types/game";
 // is correct.
 
 // const REALMS: Realm[] = ["poe1", "xbox", "sony", "poe2"];
-const REALMS: Realm[] = ["poe1", "poe2"];
+// const REALMS: Realm[] = ["poe1", "poe2"];
 
 export function RealmSelector() {
-  const { realmId, setRealmId } = useQueryContext();
+  const { setRealmId } = useQueryContext();
   const [activeBtn, setActiveBtn] = useState("");
 
   return (
