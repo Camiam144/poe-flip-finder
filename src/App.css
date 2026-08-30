@@ -15,6 +15,19 @@
   flex-shrink: 0;
 }
 
+.table.arbitrage-table {
+    text-align: center;
+    vertical-align: middle;
+}
+.table-container.arbitrage-table-container{
+    max-height: 25rem;
+    overflow-y: scroll;
+}
+.table.table.arbitrage-table.thead {
+    position: sticky;
+    top: 0rem;
+}
+
 .selector {
   font-size: 0.85rem;
   padding: 0.2rem 0.4rem;

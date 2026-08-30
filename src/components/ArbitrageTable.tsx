@@ -1,29 +1,45 @@
 import { useArbitrageOpportunity } from "../hooks/useArbitrage";
 import { useQueryContext } from "../state/QueryContext";
-import { ArbitrageOpportunity, Realm } from "../types/game";
+import { ArbitrageOpportunity, Realm, TradingCurrencyType } from "../types/game";
 
+
+function getTradingCurrencyName(tct: TradingCurrencyType): string  {
+   return (tct.type == "Other" ? tct.name : tct.type.toString())
+}
+
+function formatRatio(ratio: number): string {
+  let outstr: string;
+
+  if (ratio >= 1) {
+    outstr = `${Math.round(ratio)} : 1`;
+  } else if (ratio < 1 && ratio > 0) {
+    outstr = `1 : ${Math.round(1/ratio)}`;
+  } else {
+    console.log(`Invalid ratio: ${ratio}`);
+    outstr = "err : err";
+  }
+
+  return outstr
+}
 
 function OppRow({ opp }: {opp: ArbitrageOpportunity}) {
 
   return (
     <tr>
       <td>
-        {opp.path[0].type}
+        {getTradingCurrencyName(opp.path[0])}
       </td>
       <td>
-        {opp.high_ratios[0]}
+        {formatRatio(opp.high_ratios[0])}
       </td>
       <td>
-        {opp.path[1].name}
+        {getTradingCurrencyName(opp.path[1])}
       </td>
       <td>
-        {opp.high_ratios[1]}
+        {formatRatio(opp.high_ratios[1])}
       </td>
       <td>
-        {opp.path[2].type}
-      </td>
-      <td>
-        {opp.high_ratios[2]}
+        {getTradingCurrencyName(opp.path[2])}
       </td>
     </tr>
   )
@@ -38,7 +54,7 @@ function ArbitrageTable(
     leagueId: string | null;
     }) {
   const rows = [];
-  let { opportunities, isLoading, error } = useArbitrageOpportunity(realmId, leagueId);
+  let { opportunities, error } = useArbitrageOpportunity(realmId, leagueId);
 
   if (!realmId || !leagueId) {
     rows.push(
@@ -71,29 +87,29 @@ function ArbitrageTable(
 
 
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>Start</th>
-          <th>Rate</th>
-          <th>Mid</th>
-          <th>Rate</th>
-          <th>End</th>
-        </tr>
-      </thead>
       <tbody>
         {rows}
       </tbody>
-    </table>
   )
 }
 export function SortableArbitrageTable() {
   let { realmId, leagueId } = useQueryContext();
 
   return (
-    <table className="table arbitrage-table">
-      <caption>Arbitrage Opportunities</caption>
-      <ArbitrageTable realmId={realmId} leagueId={leagueId} />
-    </table>
+    <div className="table-container arbitrage-table-container">
+      <table className="table arbitrage-table">
+        <caption>Arbitrage Opportunities</caption>
+        <thead>
+          <tr>
+            <th>Start</th>
+            <th>Rate</th>
+            <th>Mid</th>
+            <th>Rate</th>
+            <th>End</th>
+          </tr>
+        </thead>
+        <ArbitrageTable realmId={realmId} leagueId={leagueId} />
+      </table>
+    </div>
   );
 }
