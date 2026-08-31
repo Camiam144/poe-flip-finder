@@ -8,7 +8,7 @@ use crate::{
         models::{RawLeagueApiResponse, Realm},
     },
     logic::{
-        self, build_and_populate_graph, get_all_arbitrage_options,
+        self, arb_opp_is_profitable, build_and_populate_graph, get_all_arbitrage_options,
         models::{ArbitrageOpportunity, Market, TradingCurrencyRates},
     },
     sync, AppState,
@@ -117,7 +117,7 @@ pub async fn handle_get_rates(
 
     // dbg!("num markets {}", &all_markets.len());
 
-    // This also should be in a kv cache. Could be as simple as a cache that has
+    // This also could be in a kv cache. Could be as simple as a cache that has
     // like <(realm, league, timestamp), (Vec<Market>, TCR)> and if the key doesn't exist
     // then I have to go pull. Or a struct that holds the markets, TCR, Graph, and
     // all of that stuff for a given realm, league and timestamp.
@@ -155,6 +155,8 @@ pub async fn handle_get_opportunities(
     // whole time.
     //
     // All of this is copied code. Also I need to parse the realm on intake.
+    // This is actually so bad, Just stuff the most recent values into some
+    // kind of cache for now and then work out invalidation later.
     let api_realm = parse_realm(realm)?;
 
     let most_recent = state
@@ -171,9 +173,16 @@ pub async fn handle_get_opportunities(
         });
     }
     let all_markets: Vec<Market> = most_recent.iter().map(Market::from).collect();
+    let rates = logic::get_base_prices(&all_markets);
 
     let graph = build_and_populate_graph(&all_markets);
     // This is hardcoded for now but will eventually be a parameter from the frontend.
     let max_depth: usize = 3;
-    Ok(get_all_arbitrage_options(&graph, max_depth))
+    let options = get_all_arbitrage_options(&graph, max_depth)
+        .iter()
+        .filter(|opp| arb_opp_is_profitable(opp, &rates))
+        .cloned()
+        .collect();
+
+    Ok(options)
 }

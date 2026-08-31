@@ -4,7 +4,7 @@ use models::{
     ArbitrageOpportunity, Graph, Market, TradingCurrencyRates, TradingCurrencyType, TradingEdge,
 };
 
-fn exchange_rate(
+fn avg_exchange_rate(
     market: &Market,
     from: &TradingCurrencyType,
     to: &TradingCurrencyType,
@@ -25,19 +25,19 @@ pub fn get_base_prices(markets: &[Market]) -> TradingCurrencyRates {
     let mut rates = TradingCurrencyRates::default();
 
     for market in markets.iter().filter(|m| m.is_trading_rate()) {
-        if let Some(rate) = exchange_rate(
+        if let Some(rate) = avg_exchange_rate(
             market,
             &TradingCurrencyType::Divine,
             &TradingCurrencyType::Exalt,
         ) {
             rates.div_to_exalt = rate;
-        } else if let Some(rate) = exchange_rate(
+        } else if let Some(rate) = avg_exchange_rate(
             market,
             &TradingCurrencyType::Divine,
             &TradingCurrencyType::Chaos,
         ) {
             rates.div_to_chaos = rate;
-        } else if let Some(rate) = exchange_rate(
+        } else if let Some(rate) = avg_exchange_rate(
             market,
             &TradingCurrencyType::Chaos,
             &TradingCurrencyType::Exalt,
@@ -100,9 +100,10 @@ pub fn market_graph_dfs(
     start_hub: &TradingCurrencyType,
     max_depth: usize,
 ) -> Vec<Vec<TradingCurrencyType>> {
+    // TODO: There's more short-circuiting logic that could go in here.
     let mut opportunities: Vec<Vec<&TradingCurrencyType>> = Vec::new();
     let mut stack: Vec<(&TradingCurrencyType, Vec<&TradingCurrencyType>)> = Vec::new();
-    // We're going to use the tuple (TCT, Vec<TCT>) to track where we are
+    // We're going to use the tuple (&TCT, Vec<&TCT>) to track where we are
     // By re-traversing the given TCTs we can build the arbitrage path
     stack.push((start_hub, Vec::<&TradingCurrencyType>::new()));
 
@@ -142,7 +143,9 @@ pub fn market_graph_dfs(
             && current_vertex != start_hub
             && hubs.contains(current_vertex)
         {
-            opportunities.push(current_path.clone())
+            // If we find an option we save it and then we're done
+            opportunities.push(current_path.clone());
+            continue;
         }
 
         // Next we have to go through all of the edges and put their connected
@@ -162,46 +165,90 @@ pub fn market_graph_dfs(
         .collect()
 }
 
-/// Calculate the return for a potential opportunity in the market
-fn build_opportunity(opp: &[TradingCurrencyType], graph: &Graph) -> ArbitrageOpportunity {
-    // I think we want to move over a sliding window of size 2 so we always
-    // have a from-to currency and then pull the respective ratio out of the graph
+/// Maybe get a reference to a specific edge from the graph, really just a convenience function
+fn get_edge_from_graph<'a>(
+    graph: &'a Graph,
+    start_curr: &TradingCurrencyType,
+    end_curr: &TradingCurrencyType,
+) -> Option<&'a TradingEdge> {
+    graph
+        .get(start_curr)
+        .and_then(|f| f.iter().find(|m| m.to_currency == *end_curr))
+}
 
+/// Calculate the return for a potential opportunity in the market
+fn build_opportunity(opp: &[TradingCurrencyType], graph: &Graph) -> Option<ArbitrageOpportunity> {
     let mut high_ratios = Vec::new();
     let mut low_ratios = Vec::new();
     let mut volumes = Vec::new();
 
+    // This could probably be written more idiomatically
     for window in opp.windows(2) {
         let from_cur = &window[0];
         let to_cur = &window[1];
 
-        // Safety: We must have an edge if we found an opportunity
-        let high_low_vol = graph
-            .get(from_cur)
-            .unwrap()
-            .iter()
-            .find(|m| m.to_currency == *to_cur)
-            .map(|e| (e.highest_ratio, e.lowest_ratio, e.volume));
+        // If there's a problem getting an edge (shouldn't be) just give up
+        let this_edge = get_edge_from_graph(graph, from_cur, to_cur)?;
 
-        if let Some(val) = high_low_vol {
-            high_ratios.push(val.0);
-            low_ratios.push(val.1);
-            volumes.push(val.2);
-        }
+        high_ratios.push(this_edge.highest_ratio);
+        low_ratios.push(this_edge.lowest_ratio);
+        volumes.push(this_edge.volume);
     }
 
-    ArbitrageOpportunity {
+    Some(ArbitrageOpportunity {
         path: opp.to_vec(),
         high_ratios,
         low_ratios,
         volumes,
+    })
+}
+
+/// Determine if a given arbitrage opportunity is profitable
+/// An opportunity is profitable if the path A -> X -> B -> A is more profitable
+/// than just A -> B -> A and no step has zero volume.
+/// Right now we only check if taking is profitable under the assumption that
+/// there will be enough inefficiences that trying to eek out market making
+/// profit is not worth our playtime.
+pub fn arb_opp_is_profitable(
+    arb_opp: &ArbitrageOpportunity,
+    current_rates: &TradingCurrencyRates,
+) -> bool {
+    // Any more advanced filtering can be done on the front end, any computation
+    // there should just be dividing volume steps by overall price for an estimate
+    // on total trades.
+    if arb_opp.volumes.contains(&0) {
+        return false;
     }
+
+    let final_opp_rate: f64 = arb_opp.high_ratios.iter().product();
+    let Some(start_curr) = arb_opp.path.first() else {
+        return false;
+    };
+    let Some(end_curr) = arb_opp.path.last() else {
+        return false;
+    };
+    let comp_rate = match (start_curr, end_curr) {
+        (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt) => current_rates.chaos_to_exalt,
+        (TradingCurrencyType::Divine, TradingCurrencyType::Exalt) => current_rates.div_to_exalt,
+        (TradingCurrencyType::Divine, TradingCurrencyType::Chaos) => current_rates.div_to_chaos,
+        (TradingCurrencyType::Chaos, TradingCurrencyType::Divine) => {
+            1.0 / current_rates.div_to_chaos
+        }
+        (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => {
+            1.0 / current_rates.div_to_exalt
+        }
+        (TradingCurrencyType::Exalt, TradingCurrencyType::Chaos) => {
+            1.0 / current_rates.chaos_to_exalt
+        }
+        (_, _) => return false,
+    };
+
+    final_opp_rate > comp_rate
 }
 
 /// Runs a DFS over the markets to try and find open deals
 pub fn get_all_arbitrage_options(graph: &Graph, max_depth: usize) -> Vec<ArbitrageOpportunity> {
     // TODO: Need some way to filter based on volume, too.
-    let mut opportunities = Vec::new();
 
     let hubs = [
         TradingCurrencyType::Divine,
@@ -209,14 +256,11 @@ pub fn get_all_arbitrage_options(graph: &Graph, max_depth: usize) -> Vec<Arbitra
         TradingCurrencyType::Exalt,
     ];
 
-    for hub in hubs {
-        let hub_opps = market_graph_dfs(graph, &hub, max_depth);
-        for opp in hub_opps {
-            let arb = build_opportunity(&opp, graph);
-            opportunities.push(arb);
-        }
-    }
-    opportunities
+    hubs.iter()
+        .flat_map(|hub| market_graph_dfs(graph, hub, max_depth))
+        .filter(|opp| opp.len() == max_depth)
+        .filter_map(|opp| build_opportunity(&opp, graph))
+        .collect()
 }
 
 #[cfg(test)]
@@ -343,7 +387,7 @@ mod tests {
         assert!(!paths.is_empty());
         assert_eq!(
             paths[0],
-            vec![chaos.clone(), test_item.clone(), divine.clone()]
+            vec![chaos.clone(), test_item.clone(), divine.clone(),]
         );
     }
 }

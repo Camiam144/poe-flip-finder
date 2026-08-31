@@ -10,10 +10,18 @@ function getTradingCurrencyName(tct: TradingCurrencyType): string  {
 function formatRatio(ratio: number): string {
   let outstr: string;
 
+  // if (ratio >= 1) {
+  //   outstr = `${Math.round(ratio)} : 1`;
+  // } else if (ratio < 1 && ratio > 0) {
+  //   outstr = `1 : ${Math.round(1/ratio)}`;
+  // } else {
+  //   console.log(`Invalid ratio: ${ratio}`);
+  //   outstr = "err : err";
+  // }
   if (ratio >= 1) {
-    outstr = `${Math.round(ratio)} : 1`;
+    outstr = `${(ratio).toFixed(2)} : 1`;
   } else if (ratio < 1 && ratio > 0) {
-    outstr = `1 : ${Math.round(1/ratio)}`;
+    outstr = `1 : ${(1/ratio).toFixed(2)}`;
   } else {
     console.log(`Invalid ratio: ${ratio}`);
     outstr = "err : err";
