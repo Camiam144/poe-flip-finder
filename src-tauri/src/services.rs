@@ -178,11 +178,37 @@ pub async fn handle_get_opportunities(
     let graph = build_and_populate_graph(&all_markets);
     // This is hardcoded for now but will eventually be a parameter from the frontend.
     let max_depth: usize = 3;
-    let options = get_all_arbitrage_options(&graph, max_depth)
+    let options: Vec<ArbitrageOpportunity> = get_all_arbitrage_options(&graph, max_depth)
         .iter()
         .filter(|opp| arb_opp_is_profitable(opp, &rates))
         .cloned()
         .collect();
+
+    let search_item = "Perfect Exalted Orb".to_string();
+    let dbg_chaos_item = logic::get_edge_from_graph(
+        &graph,
+        &logic::models::TradingCurrencyType::Chaos,
+        &logic::models::TradingCurrencyType::Other(search_item.clone()),
+    );
+    let dbg_item_div = logic::get_edge_from_graph(
+        &graph,
+        &logic::models::TradingCurrencyType::Other(search_item.clone()),
+        &logic::models::TradingCurrencyType::Divine,
+    );
+    if let Some(c_i) = dbg_chaos_item {
+        if let Some(i_d) = dbg_item_div {
+            // println!("chaos -> item {:#?}", c_i);
+            // println!("item -> div {:#?}", i_d);
+
+            for o in options.iter().filter(|&opp| {
+                opp.path[0] == logic::models::TradingCurrencyType::Chaos
+                    && opp.path[1] == logic::models::TradingCurrencyType::Other(search_item.clone())
+            }) {
+                println!("{:#?}", &o);
+                println!("arb rate: {:#?}", &o.high_ratios.iter().product::<f64>());
+            }
+        }
+    }
 
     Ok(options)
 }

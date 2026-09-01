@@ -30,19 +30,19 @@ pub fn get_base_prices(markets: &[Market]) -> TradingCurrencyRates {
             &TradingCurrencyType::Divine,
             &TradingCurrencyType::Exalt,
         ) {
-            rates.div_to_exalt = rate;
+            rates.exalt_per_div = rate;
         } else if let Some(rate) = avg_exchange_rate(
             market,
             &TradingCurrencyType::Divine,
             &TradingCurrencyType::Chaos,
         ) {
-            rates.div_to_chaos = rate;
+            rates.chaos_per_div = rate;
         } else if let Some(rate) = avg_exchange_rate(
             market,
             &TradingCurrencyType::Chaos,
             &TradingCurrencyType::Exalt,
         ) {
-            rates.chaos_to_exalt = rate;
+            rates.exalt_per_chaos = rate;
         }
     }
     rates
@@ -166,7 +166,7 @@ pub fn market_graph_dfs(
 }
 
 /// Maybe get a reference to a specific edge from the graph, really just a convenience function
-fn get_edge_from_graph<'a>(
+pub fn get_edge_from_graph<'a>(
     graph: &'a Graph,
     start_curr: &TradingCurrencyType,
     end_curr: &TradingCurrencyType,
@@ -176,19 +176,16 @@ fn get_edge_from_graph<'a>(
         .and_then(|f| f.iter().find(|m| m.to_currency == *end_curr))
 }
 
-/// Calculate the return for a potential opportunity in the market
+/// Build the data structure of a potential opportunity in the market
 fn build_opportunity(opp: &[TradingCurrencyType], graph: &Graph) -> Option<ArbitrageOpportunity> {
     let mut high_ratios = Vec::new();
     let mut low_ratios = Vec::new();
     let mut volumes = Vec::new();
 
     // This could probably be written more idiomatically
-    for window in opp.windows(2) {
-        let from_cur = &window[0];
-        let to_cur = &window[1];
-
+    for w in opp.windows(2) {
         // If there's a problem getting an edge (shouldn't be) just give up
-        let this_edge = get_edge_from_graph(graph, from_cur, to_cur)?;
+        let this_edge = get_edge_from_graph(graph, &w[0], &w[1])?;
 
         high_ratios.push(this_edge.highest_ratio);
         low_ratios.push(this_edge.lowest_ratio);
@@ -209,6 +206,7 @@ fn build_opportunity(opp: &[TradingCurrencyType], graph: &Graph) -> Option<Arbit
 /// Right now we only check if taking is profitable under the assumption that
 /// there will be enough inefficiences that trying to eek out market making
 /// profit is not worth our playtime.
+/// There's some error in here, not sure what it is but it is wrong.
 pub fn arb_opp_is_profitable(
     arb_opp: &ArbitrageOpportunity,
     current_rates: &TradingCurrencyRates,
@@ -228,22 +226,23 @@ pub fn arb_opp_is_profitable(
         return false;
     };
     let comp_rate = match (start_curr, end_curr) {
-        (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt) => current_rates.chaos_to_exalt,
-        (TradingCurrencyType::Divine, TradingCurrencyType::Exalt) => current_rates.div_to_exalt,
-        (TradingCurrencyType::Divine, TradingCurrencyType::Chaos) => current_rates.div_to_chaos,
-        (TradingCurrencyType::Chaos, TradingCurrencyType::Divine) => {
-            1.0 / current_rates.div_to_chaos
+        (TradingCurrencyType::Exalt, TradingCurrencyType::Chaos) => current_rates.exalt_per_chaos,
+        (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt) => {
+            1.0 / current_rates.exalt_per_chaos
         }
-        (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => {
-            1.0 / current_rates.div_to_exalt
+        (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => current_rates.exalt_per_div,
+        (TradingCurrencyType::Divine, TradingCurrencyType::Exalt) => {
+            1.0 / current_rates.exalt_per_div
         }
-        (TradingCurrencyType::Exalt, TradingCurrencyType::Chaos) => {
-            1.0 / current_rates.chaos_to_exalt
+        (TradingCurrencyType::Chaos, TradingCurrencyType::Divine) => current_rates.chaos_per_div,
+        (TradingCurrencyType::Divine, TradingCurrencyType::Chaos) => {
+            1.0 / current_rates.chaos_per_div
         }
         (_, _) => return false,
     };
 
-    final_opp_rate > comp_rate
+    // Due to how I have things set up we actually want this to be < or we take the reciprocal of both
+    final_opp_rate < comp_rate
 }
 
 /// Runs a DFS over the markets to try and find open deals

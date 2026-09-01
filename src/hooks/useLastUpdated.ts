@@ -24,7 +24,10 @@ export function useLastRefresh(realmId: Realm | null): LastRefreshResult {
     fetchLastRefresh(realmId)
       .then((data) => {
         if (!cancelled) {
-          setLastRefresh(data);
+          const parts = data.trim().split(" ");
+          const formattedStringDate = `${parts[0]}T${parts[1]}${parts[2]}`;
+          const date = new Date(formattedStringDate);
+          setLastRefresh(date.toLocaleString());
         }
       })
       .catch((err) => {

@@ -10,14 +10,6 @@ function getTradingCurrencyName(tct: TradingCurrencyType): string  {
 function formatRatio(ratio: number): string {
   let outstr: string;
 
-  // if (ratio >= 1) {
-  //   outstr = `${Math.round(ratio)} : 1`;
-  // } else if (ratio < 1 && ratio > 0) {
-  //   outstr = `1 : ${Math.round(1/ratio)}`;
-  // } else {
-  //   console.log(`Invalid ratio: ${ratio}`);
-  //   outstr = "err : err";
-  // }
   if (ratio >= 1) {
     outstr = `${(ratio).toFixed(2)} : 1`;
   } else if (ratio < 1 && ratio > 0) {
@@ -26,6 +18,12 @@ function formatRatio(ratio: number): string {
     console.log(`Invalid ratio: ${ratio}`);
     outstr = "err : err";
   }
+
+  // if (ratio) {
+  //   outstr = `${ratio}`
+  // } else {
+  //   outstr = "err"
+  // }
 
   return outstr
 }
@@ -49,6 +47,9 @@ function OppRow({ opp }: {opp: ArbitrageOpportunity}) {
       <td>
         {getTradingCurrencyName(opp.path[2])}
       </td>
+      <td>
+        {(1/(opp.high_ratios[0] * opp.high_ratios[1])).toPrecision(3)}
+      </td>
     </tr>
   )
 }
@@ -66,18 +67,18 @@ function ArbitrageTable(
 
   if (!realmId || !leagueId) {
     rows.push(
-      <tr>
-        "Pick a league"
+      <tr key={"loading"}>
+        {"Pick a league"}
       </tr>
     )
   }
 
   else if (error) {
     rows.push(
-      <tr>
+      <tr key={"error"}>
         {error.message}
       </tr>
-    )
+    );
   }
 
   else {
@@ -88,7 +89,7 @@ function ArbitrageTable(
       const key = opp.path.map((e) => e.type == "Other" ? e.name : e.type.toString()).join("|");
       rows.push(
         <OppRow opp={opp} key={key} />
-      )
+      );
     }
   }
 
@@ -114,6 +115,7 @@ export function SortableArbitrageTable() {
             <th>Mid</th>
             <th>Rate</th>
             <th>End</th>
+            <th>Profit?</th>
           </tr>
         </thead>
         <ArbitrageTable realmId={realmId} leagueId={leagueId} />

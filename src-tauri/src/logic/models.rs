@@ -43,9 +43,9 @@ impl TradingCurrencyType {
 
 #[derive(Debug, Default, Serialize)]
 pub struct TradingCurrencyRates {
-    pub div_to_exalt: f64,
-    pub div_to_chaos: f64,
-    pub chaos_to_exalt: f64,
+    pub exalt_per_div: f64,
+    pub chaos_per_div: f64,
+    pub exalt_per_chaos: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

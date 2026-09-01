@@ -1,3 +1,7 @@
+html, body {
+    font-family: Arial, Helvetica, sans-serif;
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -20,7 +24,7 @@
     vertical-align: middle;
 }
 .table-container.arbitrage-table-container{
-    max-height: 25rem;
+    /*max-height: 25rem;*/
     overflow-y: scroll;
 }
 .table.table.arbitrage-table.thead {

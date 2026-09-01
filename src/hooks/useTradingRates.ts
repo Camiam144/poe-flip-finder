@@ -15,9 +15,9 @@ export function useTradingCurrencyRates(
   leagueId: League["id"] | null,
 ): TradingCurrencyResult {
   const [tradingRates, setRates] = useState<TradingCurrencyRates>({
-    div_to_exalt: 0,
-    div_to_chaos: 0,
-    chaos_to_exalt: 0,
+    exalt_per_div: 0,
+    chaos_per_div: 0,
+    exalt_per_chaos: 0,
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<FrontendError | null>(null);

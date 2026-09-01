@@ -10,17 +10,17 @@ const RatesTable = ({
   <tbody>
     <tr>
       <td>Div</td>
-      <td>1 : {tradingRates.div_to_exalt.toFixed(2)}</td>
+      <td>1 : {tradingRates.exalt_per_div.toFixed(2)}</td>
       <td>Exalt</td>
     </tr>
     <tr>
       <td>Div</td>
-      <td>1 : {tradingRates.div_to_chaos.toFixed(2)}</td>
+      <td>1 : {tradingRates.chaos_per_div.toFixed(2)}</td>
       <td>Chaos</td>
     </tr>
     <tr>
       <td>Chaos:</td>
-      <td>1 : {tradingRates.chaos_to_exalt.toFixed(2)}</td>
+      <td>1 : {tradingRates.exalt_per_chaos.toFixed(2)}</td>
       <td>Exalt</td>
     </tr>
   </tbody>

@@ -29,9 +29,9 @@ export type TradingCurrencyType =
   | { type: "Divine"}
 
 export interface TradingCurrencyRates {
-  div_to_exalt: number;
-  div_to_chaos: number;
-  chaos_to_exalt: number;
+  exalt_per_div: number;
+  chaos_per_div: number;
+  exalt_per_chaos: number;
 }
 
 export type UpdateOutcome = "Success" | "NoUpdateNeeded";
