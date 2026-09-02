@@ -48,7 +48,7 @@ function OppRow({ opp }: {opp: ArbitrageOpportunity}) {
         {getTradingCurrencyName(opp.path[2])}
       </td>
       <td>
-        {(1/(opp.high_ratios[0] * opp.high_ratios[1])).toPrecision(3)}
+        {(1.0/(opp.high_ratios[0] * opp.high_ratios[1])).toPrecision(3)}
       </td>
     </tr>
   )

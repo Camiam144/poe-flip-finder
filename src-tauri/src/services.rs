@@ -8,30 +8,11 @@ use crate::{
         models::{RawLeagueApiResponse, Realm},
     },
     logic::{
-        self, arb_opp_is_profitable, build_and_populate_graph, get_all_arbitrage_options,
+        self, build_and_populate_graph, get_all_arbitrage_options,
         models::{ArbitrageOpportunity, Market, TradingCurrencyRates},
     },
     sync, AppState,
 };
-
-fn get_cached_leagues(state: &AppState, realm: &Realm) -> Option<RawLeagueApiResponse> {
-    let cached_leagues = state.league_cache.lock().unwrap();
-
-    match realm {
-        Realm::Poe1 => cached_leagues[0].clone(),
-        Realm::Poe2 => cached_leagues[1].clone(),
-    }
-}
-
-fn cache_leagues(state: &AppState, realm: &Realm, leagues: &RawLeagueApiResponse) {
-    let mut cached_leagues = state.league_cache.lock().unwrap();
-
-    // dbg!("Caching leagues for {}", api_realm.to_string());
-    match realm {
-        Realm::Poe1 => cached_leagues[0] = Some(leagues.clone()),
-        Realm::Poe2 => cached_leagues[1] = Some(leagues.clone()),
-    };
-}
 
 fn parse_realm(realm: &str) -> Result<Realm, FrontendError> {
     realm
@@ -46,7 +27,9 @@ pub async fn handle_current_leagues(
 ) -> Result<RawLeagueApiResponse, FrontendError> {
     let api_realm = parse_realm(realm)?;
 
-    let leagues = if let Some(val) = get_cached_leagues(state, &api_realm) {
+    // Don't have to worry about cache invalidation here because the leagues
+    // change on a monthly cadence.
+    let leagues = if let Some(val) = state.get_cached_leagues(&api_realm) {
         val
     } else {
         // Didn't have a cached value, store the new value
@@ -54,7 +37,7 @@ pub async fn handle_current_leagues(
             .await
             .map_err(FrontendError::from)?;
 
-        cache_leagues(state, &api_realm, &new_leagues);
+        state.cache_leagues(&api_realm, &new_leagues);
         new_leagues
     };
 
@@ -89,16 +72,36 @@ pub async fn handle_most_recent_update_time(
     }
 }
 
-pub async fn handle_get_rates(
+async fn get_newest_parsed_change_id(
     state: &AppState,
-    realm: &str,
+    realm: &Realm,
     league: &str,
-) -> Result<TradingCurrencyRates, FrontendError> {
-    let api_realm = parse_realm(realm)?;
+) -> Result<i64, FrontendError> {
+    let newest_change_id = state
+        .db_client
+        .get_most_recent_parsed_changeid(realm, league)
+        .await
+        .map_err(|e| FrontendError::Database {
+            message: e.to_string(),
+        })?;
 
+    if let Some(id) = newest_change_id {
+        Ok(id)
+    } else {
+        Err(FrontendError::Database {
+            message: format!("No most recent parsed entry for {} and {}", realm, league),
+        })
+    }
+}
+
+async fn get_most_recent_markets(
+    state: &AppState,
+    realm: &Realm,
+    league: &str,
+) -> Result<Vec<Market>, FrontendError> {
     let most_recent = state
         .db_client
-        .get_latest_parsed_marketplace(&api_realm, league)
+        .get_latest_parsed_marketplace(realm, league)
         .await
         .map_err(|e| FrontendError::Database {
             message: e.to_string(),
@@ -106,16 +109,48 @@ pub async fn handle_get_rates(
 
     if most_recent.is_empty() {
         return Err(FrontendError::Database {
-            message: format!("No most recent entry for {} and {}", api_realm, league),
+            message: format!("No most recent entry for {} and {}", realm, league),
         });
     }
 
-    // TODO: This should probably be cached in a kv cache in app state, like the
-    // leagues are in a vector. Otherwise I re-pull it every time.
-    // But then I have to deal with cache invalidation...
-    let all_markets: Vec<Market> = most_recent.iter().map(Market::from).collect();
+    Ok(most_recent.iter().map(Market::from).collect())
+}
 
-    // dbg!("num markets {}", &all_markets.len());
+/// Check if we need to invalidate the cache based on our db
+async fn get_or_update_most_recent_market_cache(
+    state: &AppState,
+    realm: &Realm,
+    league: &str,
+) -> Result<Vec<Market>, FrontendError> {
+    // First we check the cache. If it doesn't exist, get a new one.
+    // If the cache does exist, check the change id. If cache id < change_id,
+    // invalidate and get a new cache.
+
+    let maybe_cache = state.get_cached_most_recent_markets(realm);
+    let newest_change_id = get_newest_parsed_change_id(state, realm, league).await?;
+
+    let is_stale = match maybe_cache {
+        Some(cache) => cache.0 < newest_change_id,
+        None => true,
+    };
+
+    if is_stale {
+        let most_recent = get_most_recent_markets(state, realm, league).await?;
+        state.cache_most_recent_markets(realm, newest_change_id, most_recent);
+    }
+
+    // We now know markets are in the cache
+    Ok(state.get_cached_most_recent_markets(realm).unwrap().1)
+}
+
+pub async fn handle_get_rates(
+    state: &AppState,
+    realm: &str,
+    league: &str,
+) -> Result<TradingCurrencyRates, FrontendError> {
+    let api_realm = parse_realm(realm)?;
+
+    let all_markets = get_or_update_most_recent_market_cache(state, &api_realm, league).await?;
 
     // This also could be in a kv cache. Could be as simple as a cache that has
     // like <(realm, league, timestamp), (Vec<Market>, TCR)> and if the key doesn't exist
@@ -142,9 +177,7 @@ pub async fn handle_update_database(
     Ok(update_result)
 }
 
-/// Get all of the opportunities available. We're going to rebuild the market list
-/// here but the current leagues could be cached in the app state and then rebuilt
-/// whenever the database update fires.
+/// Get all of the opportunities available.
 pub async fn handle_get_opportunities(
     state: &AppState,
     realm: &str,
@@ -153,62 +186,20 @@ pub async fn handle_get_opportunities(
     // TODO: Stopgap for now of just pulling most recent. Eventually I will want
     // to pull the past N steps and see what has been inefficient during that
     // whole time.
-    //
-    // All of this is copied code. Also I need to parse the realm on intake.
-    // This is actually so bad, Just stuff the most recent values into some
-    // kind of cache for now and then work out invalidation later.
     let api_realm = parse_realm(realm)?;
 
-    let most_recent = state
-        .db_client
-        .get_latest_parsed_marketplace(&api_realm, league)
-        .await
-        .map_err(|e| FrontendError::Database {
-            message: e.to_string(),
-        })?;
-
-    if most_recent.is_empty() {
-        return Err(FrontendError::Database {
-            message: format!("No most recent entry for {} and {}", api_realm, league),
-        });
-    }
-    let all_markets: Vec<Market> = most_recent.iter().map(Market::from).collect();
+    let all_markets = get_or_update_most_recent_market_cache(state, &api_realm, league).await?;
     let rates = logic::get_base_prices(&all_markets);
 
     let graph = build_and_populate_graph(&all_markets);
     // This is hardcoded for now but will eventually be a parameter from the frontend.
     let max_depth: usize = 3;
-    let options: Vec<ArbitrageOpportunity> = get_all_arbitrage_options(&graph, max_depth)
+    let min_volume: i64 = 0;
+    let good_options: Vec<ArbitrageOpportunity> = get_all_arbitrage_options(&graph, max_depth)
         .iter()
-        .filter(|opp| arb_opp_is_profitable(opp, &rates))
+        .filter(|opp| opp.is_profitable(&rates) && opp.min_volume() >= min_volume)
         .cloned()
         .collect();
 
-    let search_item = "Perfect Exalted Orb".to_string();
-    let dbg_chaos_item = logic::get_edge_from_graph(
-        &graph,
-        &logic::models::TradingCurrencyType::Chaos,
-        &logic::models::TradingCurrencyType::Other(search_item.clone()),
-    );
-    let dbg_item_div = logic::get_edge_from_graph(
-        &graph,
-        &logic::models::TradingCurrencyType::Other(search_item.clone()),
-        &logic::models::TradingCurrencyType::Divine,
-    );
-    if let Some(c_i) = dbg_chaos_item {
-        if let Some(i_d) = dbg_item_div {
-            // println!("chaos -> item {:#?}", c_i);
-            // println!("item -> div {:#?}", i_d);
-
-            for o in options.iter().filter(|&opp| {
-                opp.path[0] == logic::models::TradingCurrencyType::Chaos
-                    && opp.path[1] == logic::models::TradingCurrencyType::Other(search_item.clone())
-            }) {
-                println!("{:#?}", &o);
-                println!("arb rate: {:#?}", &o.high_ratios.iter().product::<f64>());
-            }
-        }
-    }
-
-    Ok(options)
+    Ok(good_options)
 }

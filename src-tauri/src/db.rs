@@ -267,6 +267,32 @@ impl DbClient {
         Ok(results)
     }
 
+    /// Retrieve only the most recent change ID for a given parsed marketplace
+    pub async fn get_most_recent_parsed_changeid(
+        &self,
+        realm: &Realm,
+        league_id: &str,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        let mut conn = self.pool.acquire().await?;
+        let table_name = get_table_name(realm);
+        let query_str = format!(
+            "SELECT max(change_id) FROM {} WHERE league = $1;",
+            table_name
+        );
+
+        let max_change_id: Option<(i64,)> = query_as(&query_str)
+            .bind(league_id)
+            .fetch_optional(&mut *conn)
+            .await?;
+
+        // TODO: nitpick, probably a better way to write this.
+        if let Some(inner) = max_change_id {
+            Ok(Some(inner.0))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Retrieve the entire processed marketplace for a given change_id, realm, and league
     pub async fn get_parsed_marketplace(
         &self,
@@ -296,20 +322,12 @@ impl DbClient {
         realm: &Realm,
         league_id: &str,
     ) -> Result<Vec<ParsedDbRow>, sqlx::Error> {
-        let mut conn = self.pool.acquire().await?;
-        let table_name = get_table_name(realm);
-        let query_str = format!(
-            "SELECT max(change_id) FROM {} WHERE league = $1;",
-            table_name
-        );
-
-        let max_change_id: Option<(i64,)> = query_as(&query_str)
-            .bind(league_id)
-            .fetch_optional(&mut *conn)
+        let max_change_id = self
+            .get_most_recent_parsed_changeid(realm, league_id)
             .await?;
 
         if let Some(id) = max_change_id {
-            self.get_parsed_marketplace(id.0, realm, league_id).await
+            self.get_parsed_marketplace(id, realm, league_id).await
         } else {
             Ok(Vec::new())
         }

@@ -16,8 +16,8 @@ use crate::db::models::UpdateOutcome;
 use crate::db::DbClient;
 use crate::errors::FrontendError;
 use crate::ggg_api::client::{build_http_client, ApiClient};
-use crate::ggg_api::models::RawLeagueApiResponse;
-use crate::logic::models::{ArbitrageOpportunity, TradingCurrencyRates};
+use crate::ggg_api::models::{RawLeagueApiResponse, Realm};
+use crate::logic::models::{ArbitrageOpportunity, Market, TradingCurrencyRates};
 use crate::services::{
     handle_current_leagues, handle_get_opportunities, handle_get_rates,
     handle_most_recent_update_time, handle_update_database,
@@ -28,7 +28,6 @@ async fn get_leagues(
     state: State<'_, AppState>,
     realm: String,
 ) -> Result<RawLeagueApiResponse, FrontendError> {
-    // let state = state;
     handle_current_leagues(&state, &realm).await
 }
 
@@ -70,6 +69,49 @@ pub struct AppState {
     db_client: DbClient,
     http_client: ApiClient,
     league_cache: Mutex<[Option<RawLeagueApiResponse>; 2]>,
+    most_recent_market_cache: Mutex<[Option<(i64, Vec<Market>)>; 2]>,
+}
+
+impl AppState {
+    pub fn get_cached_leagues(&self, realm: &Realm) -> Option<RawLeagueApiResponse> {
+        let cached_leagues = self.league_cache.lock().unwrap();
+
+        match realm {
+            Realm::Poe1 => cached_leagues[0].clone(),
+            Realm::Poe2 => cached_leagues[1].clone(),
+        }
+    }
+
+    pub fn cache_leagues(&self, realm: &Realm, leagues: &RawLeagueApiResponse) {
+        let mut cached_leagues = self.league_cache.lock().unwrap();
+
+        // dbg!("Caching leagues for {}", api_realm.to_string());
+        match realm {
+            Realm::Poe1 => cached_leagues[0] = Some(leagues.clone()),
+            Realm::Poe2 => cached_leagues[1] = Some(leagues.clone()),
+        };
+    }
+
+    pub fn get_cached_most_recent_markets(&self, realm: &Realm) -> Option<(i64, Vec<Market>)> {
+        // TODO: This and the caching function should both take a (Realm, League)
+        // key instead of just a realm key. For now it doesn't matter because I only
+        // care about 1 league from each realm but it should take both.
+        let cached_markets = self.most_recent_market_cache.lock().unwrap();
+
+        match realm {
+            Realm::Poe1 => cached_markets[0].clone(),
+            Realm::Poe2 => cached_markets[1].clone(),
+        }
+    }
+
+    pub fn cache_most_recent_markets(&self, realm: &Realm, change_id: i64, markets: Vec<Market>) {
+        let mut cached_markets = self.most_recent_market_cache.lock().unwrap();
+
+        match realm {
+            Realm::Poe1 => cached_markets[0] = Some((change_id, markets)),
+            Realm::Poe2 => cached_markets[1] = Some((change_id, markets)),
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -91,6 +133,7 @@ pub fn run() {
                     db_client,
                     http_client: api_client,
                     league_cache: Mutex::new([None, None]),
+                    most_recent_market_cache: Mutex::new([None, None]),
                 })
             })?;
             app.manage(app_state);

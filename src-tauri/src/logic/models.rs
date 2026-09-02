@@ -48,6 +48,30 @@ pub struct TradingCurrencyRates {
     pub exalt_per_chaos: f64,
 }
 
+impl TradingCurrencyRates {
+    pub fn get_comp_rate(
+        &self,
+        start_curr: &TradingCurrencyType,
+        end_curr: &TradingCurrencyType,
+    ) -> Option<f64> {
+        match (start_curr, end_curr) {
+            (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt) => Some(self.exalt_per_chaos),
+            (TradingCurrencyType::Exalt, TradingCurrencyType::Chaos) => {
+                Some(1.0 / self.exalt_per_chaos)
+            }
+            (TradingCurrencyType::Divine, TradingCurrencyType::Exalt) => Some(self.exalt_per_div),
+            (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => {
+                Some(1.0 / self.exalt_per_div)
+            }
+            (TradingCurrencyType::Divine, TradingCurrencyType::Chaos) => Some(self.chaos_per_div),
+            (TradingCurrencyType::Chaos, TradingCurrencyType::Divine) => {
+                Some(1.0 / self.chaos_per_div)
+            }
+            (_, _) => None,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Market {
     pub change_id: i64,
@@ -140,6 +164,54 @@ pub struct ArbitrageOpportunity {
     pub high_ratios: Vec<f64>,
     pub low_ratios: Vec<f64>,
     pub volumes: Vec<i64>,
+}
+
+impl ArbitrageOpportunity {
+    pub fn start(&self) -> Option<&TradingCurrencyType> {
+        self.path.first()
+    }
+
+    pub fn end(&self) -> Option<&TradingCurrencyType> {
+        self.path.last()
+    }
+
+    pub fn effective_rate_highest(&self) -> f64 {
+        self.high_ratios.iter().product()
+    }
+
+    pub fn effective_rate_lowest(&self) -> f64 {
+        self.low_ratios.iter().product()
+    }
+
+    pub fn min_volume(&self) -> i64 {
+        self.volumes.iter().min().copied().unwrap_or(0)
+    }
+
+    /// Get the ROI of the initial investment expressed as a fraction from zero.
+    /// e.g. an ROI of 0.0 means no difference than using a direct exchange between
+    /// currencies, an ROI of 1.0 means you double your input, and an ROI of -0.5
+    /// means you lose half of what you put in (don't trade those!).
+    pub fn roi(&self, rates: &TradingCurrencyRates) -> Option<f64> {
+        let direct_rate = rates.get_comp_rate(self.start()?, self.end()?)?;
+        // Use this for now, but we might need to also look at lowest or hi/lo
+        let arb_rate = 1.0 / self.effective_rate_highest();
+
+        if !arb_rate.is_finite() {
+            None
+        } else {
+            Some(arb_rate / direct_rate - 1.0)
+        }
+    }
+
+    /// Determine if a given arbitrage opportunity is profitable
+    /// An opportunity is profitable if the path A -> X -> B -> A is more profitable
+    /// than just A -> B -> A and no step has zero volume.
+    /// Right now we only check if taking is profitable under the assumption that
+    /// there will be enough inefficiences that trying to eek out market making
+    /// profit is not worth our playtime.
+    pub fn is_profitable(&self, rates: &TradingCurrencyRates) -> bool {
+        self.roi(rates).is_some_and(|roi| roi > 0.0)
+    }
 }
 
 #[cfg(test)]

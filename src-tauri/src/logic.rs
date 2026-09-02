@@ -134,11 +134,11 @@ pub fn market_graph_dfs(
             continue;
         }
 
-        // If we have depth less than or equal to max_depth and we landed
+        // If we have depth equal to max_depth and we landed
         // on a different hub currency, we may have an arbitrage opportunity.
         // We can land on any other hub currency as the prices between them are (generally)
         // very stable.
-        if current_path.len() <= max_depth
+        if current_path.len() == max_depth
             && current_path.len() > 1
             && current_vertex != start_hub
             && hubs.contains(current_vertex)
@@ -200,51 +200,6 @@ fn build_opportunity(opp: &[TradingCurrencyType], graph: &Graph) -> Option<Arbit
     })
 }
 
-/// Determine if a given arbitrage opportunity is profitable
-/// An opportunity is profitable if the path A -> X -> B -> A is more profitable
-/// than just A -> B -> A and no step has zero volume.
-/// Right now we only check if taking is profitable under the assumption that
-/// there will be enough inefficiences that trying to eek out market making
-/// profit is not worth our playtime.
-/// There's some error in here, not sure what it is but it is wrong.
-pub fn arb_opp_is_profitable(
-    arb_opp: &ArbitrageOpportunity,
-    current_rates: &TradingCurrencyRates,
-) -> bool {
-    // Any more advanced filtering can be done on the front end, any computation
-    // there should just be dividing volume steps by overall price for an estimate
-    // on total trades.
-    if arb_opp.volumes.contains(&0) {
-        return false;
-    }
-
-    let final_opp_rate: f64 = arb_opp.high_ratios.iter().product();
-    let Some(start_curr) = arb_opp.path.first() else {
-        return false;
-    };
-    let Some(end_curr) = arb_opp.path.last() else {
-        return false;
-    };
-    let comp_rate = match (start_curr, end_curr) {
-        (TradingCurrencyType::Exalt, TradingCurrencyType::Chaos) => current_rates.exalt_per_chaos,
-        (TradingCurrencyType::Chaos, TradingCurrencyType::Exalt) => {
-            1.0 / current_rates.exalt_per_chaos
-        }
-        (TradingCurrencyType::Exalt, TradingCurrencyType::Divine) => current_rates.exalt_per_div,
-        (TradingCurrencyType::Divine, TradingCurrencyType::Exalt) => {
-            1.0 / current_rates.exalt_per_div
-        }
-        (TradingCurrencyType::Chaos, TradingCurrencyType::Divine) => current_rates.chaos_per_div,
-        (TradingCurrencyType::Divine, TradingCurrencyType::Chaos) => {
-            1.0 / current_rates.chaos_per_div
-        }
-        (_, _) => return false,
-    };
-
-    // Due to how I have things set up we actually want this to be < or we take the reciprocal of both
-    final_opp_rate < comp_rate
-}
-
 /// Runs a DFS over the markets to try and find open deals
 pub fn get_all_arbitrage_options(graph: &Graph, max_depth: usize) -> Vec<ArbitrageOpportunity> {
     // TODO: Need some way to filter based on volume, too.
@@ -257,7 +212,6 @@ pub fn get_all_arbitrage_options(graph: &Graph, max_depth: usize) -> Vec<Arbitra
 
     hubs.iter()
         .flat_map(|hub| market_graph_dfs(graph, hub, max_depth))
-        .filter(|opp| opp.len() == max_depth)
         .filter_map(|opp| build_opportunity(&opp, graph))
         .collect()
 }
