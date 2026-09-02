@@ -17,7 +17,7 @@ use crate::db::DbClient;
 use crate::errors::FrontendError;
 use crate::ggg_api::client::{build_http_client, ApiClient};
 use crate::ggg_api::models::{RawLeagueApiResponse, Realm};
-use crate::logic::models::{ArbitrageOpportunity, Market, TradingCurrencyRates};
+use crate::logic::models::{Market, OpportunityDisplay, TradingCurrencyRates};
 use crate::services::{
     handle_current_leagues, handle_get_opportunities, handle_get_rates,
     handle_most_recent_update_time, handle_update_database,
@@ -61,7 +61,7 @@ async fn get_arbitrage(
     state: State<'_, AppState>,
     realm: String,
     league: String,
-) -> Result<Vec<ArbitrageOpportunity>, FrontendError> {
+) -> Result<Vec<OpportunityDisplay>, FrontendError> {
     handle_get_opportunities(&state, &realm, &league).await
 }
 

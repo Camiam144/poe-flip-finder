@@ -1,6 +1,6 @@
 import { useArbitrageOpportunity } from "../hooks/useArbitrage";
 import { useQueryContext } from "../state/QueryContext";
-import { ArbitrageOpportunity, Realm, TradingCurrencyType } from "../types/game";
+import { OpportunityDisplay, Realm, TradingCurrencyType } from "../types/game";
 
 
 function getTradingCurrencyName(tct: TradingCurrencyType): string  {
@@ -10,7 +10,9 @@ function getTradingCurrencyName(tct: TradingCurrencyType): string  {
 function formatRatio(ratio: number): string {
   let outstr: string;
 
-  if (ratio >= 1) {
+  if (ratio === 1) {
+    outstr = "1 : 1";
+  } else if (ratio > 1) {
     outstr = `${(ratio).toFixed(2)} : 1`;
   } else if (ratio < 1 && ratio > 0) {
     outstr = `1 : ${(1/ratio).toFixed(2)}`;
@@ -28,7 +30,7 @@ function formatRatio(ratio: number): string {
   return outstr
 }
 
-function OppRow({ opp }: {opp: ArbitrageOpportunity}) {
+function OppRow({ opp }: {opp: OpportunityDisplay}) {
 
   return (
     <tr>
@@ -48,7 +50,10 @@ function OppRow({ opp }: {opp: ArbitrageOpportunity}) {
         {getTradingCurrencyName(opp.path[2])}
       </td>
       <td>
-        {(1.0/(opp.high_ratios[0] * opp.high_ratios[1])).toPrecision(3)}
+        {(opp.roi).toLocaleString('en-US', {style: 'percent'})}
+      </td>
+      <td>
+        {opp.profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
       </td>
     </tr>
   )
@@ -68,7 +73,9 @@ function ArbitrageTable(
   if (!realmId || !leagueId) {
     rows.push(
       <tr key={"loading"}>
+        <td>
         {"Pick a league"}
+        </td>
       </tr>
     )
   }
@@ -76,7 +83,7 @@ function ArbitrageTable(
   else if (error) {
     rows.push(
       <tr key={"error"}>
-        {error.message}
+        <td>{error.message}</td>
       </tr>
     );
   }
@@ -115,6 +122,7 @@ export function SortableArbitrageTable() {
             <th>Mid</th>
             <th>Rate</th>
             <th>End</th>
+            <th>ROI %</th>
             <th>Profit?</th>
           </tr>
         </thead>

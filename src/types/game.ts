@@ -37,9 +37,11 @@ export interface TradingCurrencyRates {
 export type UpdateOutcome = "Success" | "NoUpdateNeeded";
 
 // this could be improved for sure.
-export interface ArbitrageOpportunity {
+export interface OpportunityDisplay {
   path: TradingCurrencyType[],
   high_ratios: number[],
   low_ratios: number[],
-  volumes: number[],
+  min_volume: number,
+  roi: number,
+  profit: number,
 }

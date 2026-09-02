@@ -212,6 +212,46 @@ impl ArbitrageOpportunity {
     pub fn is_profitable(&self, rates: &TradingCurrencyRates) -> bool {
         self.roi(rates).is_some_and(|roi| roi > 0.0)
     }
+
+    /// If the path is profitable, calculate the profit in terms of the ending
+    /// currency. Again, we use the high_ratios here but could be different
+    pub fn get_profit(&self, rates: &TradingCurrencyRates) -> Option<f64> {
+        let revenue = self.effective_rate_highest();
+        let mult = match self.high_ratios.first() {
+            Some(val) if *val > 1.0 => *val,
+            Some(_) => 1.0,
+            None => return None,
+        };
+        let direct_rate = rates.get_comp_rate(self.start()?, self.end()?)?;
+
+        Some(mult * (1.0 / revenue - direct_rate))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpportunityDisplay {
+    pub path: Vec<TradingCurrencyType>,
+    pub high_ratios: Vec<f64>,
+    pub low_ratios: Vec<f64>,
+    pub min_volume: i64,
+    pub roi: f64,
+    pub profit: f64,
+}
+
+impl OpportunityDisplay {
+    pub fn from_opportunity(
+        opp: &ArbitrageOpportunity,
+        rates: &TradingCurrencyRates,
+    ) -> Option<Self> {
+        Some(Self {
+            path: opp.path.to_vec(),
+            high_ratios: opp.high_ratios.to_vec(),
+            low_ratios: opp.low_ratios.to_vec(),
+            min_volume: opp.min_volume(),
+            roi: opp.roi(rates)?,
+            profit: opp.get_profit(rates)?,
+        })
+    }
 }
 
 #[cfg(test)]

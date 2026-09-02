@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { FrontendError, League, Realm, ArbitrageOpportunity} from "../types/game";
+import { FrontendError, League, Realm, OpportunityDisplay} from "../types/game";
 import { fetchArbitrage } from "../api/tauri";
 
 interface ArbitrageResult {
-  opportunities: ArbitrageOpportunity[];
+  opportunities: OpportunityDisplay[];
   isLoading: boolean;
   error: FrontendError | null;
 }
@@ -15,7 +15,7 @@ export function useArbitrageOpportunity(
   realmId: Realm | null,
   leagueId: League["id"] | null,
 ): ArbitrageResult {
-  const [opportunities, setOpps] = useState<ArbitrageOpportunity[]>([]);
+  const [opportunities, setOpps] = useState<OpportunityDisplay[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<FrontendError | null>(null);
 

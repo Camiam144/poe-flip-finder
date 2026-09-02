@@ -9,7 +9,7 @@ use crate::{
     },
     logic::{
         self, build_and_populate_graph, get_all_arbitrage_options,
-        models::{ArbitrageOpportunity, Market, TradingCurrencyRates},
+        models::{Market, OpportunityDisplay, TradingCurrencyRates},
     },
     sync, AppState,
 };
@@ -182,7 +182,7 @@ pub async fn handle_get_opportunities(
     state: &AppState,
     realm: &str,
     league: &str,
-) -> Result<Vec<ArbitrageOpportunity>, FrontendError> {
+) -> Result<Vec<OpportunityDisplay>, FrontendError> {
     // TODO: Stopgap for now of just pulling most recent. Eventually I will want
     // to pull the past N steps and see what has been inefficient during that
     // whole time.
@@ -195,10 +195,10 @@ pub async fn handle_get_opportunities(
     // This is hardcoded for now but will eventually be a parameter from the frontend.
     let max_depth: usize = 3;
     let min_volume: i64 = 0;
-    let good_options: Vec<ArbitrageOpportunity> = get_all_arbitrage_options(&graph, max_depth)
+    let good_options: Vec<OpportunityDisplay> = get_all_arbitrage_options(&graph, max_depth)
         .iter()
         .filter(|opp| opp.is_profitable(&rates) && opp.min_volume() >= min_volume)
-        .cloned()
+        .filter_map(|opp| OpportunityDisplay::from_opportunity(opp, &rates))
         .collect();
 
     Ok(good_options)
