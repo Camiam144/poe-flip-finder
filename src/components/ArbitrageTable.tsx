@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useArbitrageOpportunity } from "../hooks/useArbitrage";
 import { useQueryContext } from "../state/QueryContext";
 import { OpportunityDisplay, Realm, TradingCurrencyType } from "../types/game";
@@ -63,12 +64,17 @@ function ArbitrageTable(
   {
     realmId,
     leagueId,
+    minVolume
   }: {
     realmId: Realm | null;
     leagueId: string | null;
+      minVolume: number | null;
     }) {
   const rows = [];
   let { opportunities, error } = useArbitrageOpportunity(realmId, leagueId);
+  if (!minVolume || isNaN(minVolume) || !isFinite(minVolume)) {
+    minVolume = 0;
+  }
 
   if (!realmId || !leagueId) {
     rows.push(
@@ -90,7 +96,7 @@ function ArbitrageTable(
 
   else {
     for (const opp of opportunities){
-      if (opp.path.length < 3) {
+      if (opp.path.length < 3 || opp.min_volume <= minVolume) {
         continue
       }
       const key = opp.path.map((e) => e.type == "Other" ? e.name : e.type.toString()).join("|");
@@ -100,19 +106,29 @@ function ArbitrageTable(
     }
   }
 
-
-
   return (
       <tbody>
         {rows}
       </tbody>
   )
 }
+
+function SearchBar(
+  { minVolume, onMinVolumeChange}
+    : { minVolume: number, onMinVolumeChange: React.Dispatch<React.SetStateAction<number>> }) {
+  return (
+    <form onSubmit={(e)=> e.preventDefault()}>
+      <input type="number" value={ minVolume } placeholder="Min Vol..." onChange={(e) => onMinVolumeChange(e.target.valueAsNumber)}/>
+  </form>
+)
+}
+
 export function SortableArbitrageTable() {
   let { realmId, leagueId } = useQueryContext();
-
+  const [minVolume, setMinVolume] = useState<number>(0);
   return (
     <div className="table-container arbitrage-table-container">
+      <SearchBar minVolume={minVolume} onMinVolumeChange={setMinVolume} />
       <table className="table arbitrage-table">
         <caption>Arbitrage Opportunities</caption>
         <thead>
@@ -126,7 +142,7 @@ export function SortableArbitrageTable() {
             <th>Profit?</th>
           </tr>
         </thead>
-        <ArbitrageTable realmId={realmId} leagueId={leagueId} />
+        <ArbitrageTable realmId={realmId} leagueId={leagueId} minVolume={minVolume} />
       </table>
     </div>
   );
